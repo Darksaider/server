@@ -1,0 +1,13 @@
+{
+  "cSpell.words": ["elysia"],
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": true,
+  "editor.trimAutoWhitespace": true,
+  "editor.wordWrapColumn": 200,
+  "editor.wordWrap": "wordWrapColumn",
+  "editor.fontSize": 15,
+  "editor.lineHeight": 20,
+  "workbench.editor.tabSizing": "shrink",
+  "workbench.editor.pinnedTabSizing": "compact"
+}
