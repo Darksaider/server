@@ -1,41 +1,78 @@
 import { Elysia, Context } from "elysia";
-import { createUser, Filter, User } from "../types/types";
-import userService from "../services/UserService";
+import { createUser, LoginUser } from "../types/types";
+import userService, { ElysiaContext } from "../services/UserService"; // Потрібно правильно експортувати ElysiaContext
 import { routeErrorHandler } from "../utils/errors";
-import { parseFilterValue } from "../utils/fn";
-export const userRoutes = new Elysia();
+import { hashPassword } from "../utils/hashPassword";
+import jwtMiddleware from "../Middleware/JwtMiddleware";
 
-userRoutes.get("/users", async (context: Context) => {
-  const urlParams = new URLSearchParams(context.request.url.split("?")[1]);
-  const filter: Filter<User> = {};
+export const userRoutes = new Elysia()
+  .get("/users", async (context: Context) => {
+    const res = await routeErrorHandler(context, () => userService.getAll());
+    return res;
+  })
+  .get("/users/:id", async (context: Context) => {
+    const id = context.params.id;
+    const res = await routeErrorHandler(context, () => userService.getById(id));
+    return res;
+  })
+  .put("/users/:id", async (context: Context) => {
+    const item = context.body as createUser;
+    const id = context.params.id;
+    const res = await routeErrorHandler(context, async () => userService.updateUser(id, item));
+    return res;
+  })
+  .delete("/users/:id", async (context: Context) => {
+    const id = context.params.id;
+    const res = await routeErrorHandler(context, () => userService.delete(id));
+    return res;
+  })
+  .post("/users", async (context: Context) => {
+    const data = context.body as createUser;
+    const passwordGenerate = await hashPassword(data.password_hash);
 
-  for (const [key, value] of urlParams.entries()) {
-    const parsedValue = parseFilterValue<User>(value, key as keyof User);
-    filter[key as keyof User] = parsedValue;
-  }
-  const res = await routeErrorHandler(context, () =>
-    userService.getAll({ filter: filter }),
-  );
-  return res;
-});
+    const newObj: createUser = {
+      ...data,
+      password_hash: passwordGenerate,
+    };
 
-userRoutes.get("/users/:id", async (context) => {
-  const id = context.params.id;
-  const res = await routeErrorHandler(context, () => userService.getById(id));
-  return res;
-});
+    const res = await routeErrorHandler(context, async () => userService.createUser(newObj), 201);
+    return res;
+  })
+  .post("/users/login", async (context: ElysiaContext) => {
+    // Отримуємо токен від сервісу
+    const token = await routeErrorHandler(
+      context,
+      async () => userService.loginUser(context.body as LoginUser, context)
+    );
 
-userRoutes.put("/users/:id", async (context) => {
-  const item = context.body as createUser;
-  const id = context.params.id;
-  const res = await routeErrorHandler(context, async () =>
-    userService.updateUser(id, item),
-  );
-  return res;
-});
+    ;
+    context.cookie.token.set({
+      value: token.data,
+      // httpOnly: true,
+      // maxAge: 7 * 24 * 60 * 60,
+      // sameSite: "strict"
+    });
 
-userRoutes.delete("/users/:id", async (context) => {
-  const id = context.params.id;
-  const res = await routeErrorHandler(context, () => userService.delete(id));
-  return res;
-});
+    return { message: "Login successful", token: token.data };
+  })
+  .use(jwtMiddleware)
+  .get("/profile", ({ user, set }) => {
+    if (!user) {
+      set.status = 401;
+      return { message: "Unauthorized" };
+    }
+    return { user };
+  })
+  .get("/admin", ({ user, hasRole, set }) => {
+    if (!user) {
+      set.status = 401;
+      return { message: "Unauthorized" };
+    }
+
+    if (!hasRole("admin")) {
+      set.status = 403;
+      return { message: "Forbidden" };
+    }
+
+    return { message: "Welcome, admin!" };
+  });

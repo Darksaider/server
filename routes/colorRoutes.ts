@@ -1,36 +1,54 @@
 import { Elysia, Context } from "elysia";
-import { createUser } from "../types/types";
+import { CreateColor, createUser } from "../types/types";
 import userService from "../services/UserService";
 import { routeErrorHandler } from "../utils/errors";
-export const userRoutes = new Elysia();
+import colorService from "../services/colorService";
+import { getUniqueProductAttributes } from "../prisma/repositories/filter";
+export const colorRoutes = new Elysia();
 
-userRoutes.get("/users", async (context: Context) => {});
-userRoutes.post("/users", async (context) => {
+colorRoutes.post("/colors", async (context) => {
   const res = await routeErrorHandler(
     context,
-    async () => userService.createUser(context.body as createUser),
+    async () => colorService.repository.create(context.body as createUser),
     201,
   );
   return res;
 });
 
-userRoutes.get("/users/:id", async (context) => {
+colorRoutes.get("/get", async (context) => {
+  const res = await routeErrorHandler(
+    context,
+    async () => getUniqueProductAttributes(),
+    201,
+  );
+  return res;
+});
+colorRoutes.get("/colors", async (context) => {
+  const res = await routeErrorHandler(
+    context,
+    async () => colorService.getAll(),
+    201,
+  );
+  return res;
+});
+
+colorRoutes.get("/color/:id", async (context) => {
   const id = context.params.id;
   const res = await routeErrorHandler(context, () => userService.getById(id));
   return res;
 });
 
-userRoutes.put("/users/:id", async (context) => {
-  const item = context.body as createUser;
+colorRoutes.put("/users/:id", async (context) => {
+  const item = context.body as CreateColor;
   const id = context.params.id;
   const res = await routeErrorHandler(context, async () =>
-    userService.updateUser(id, item),
+    colorService.repository.update(id, item),
   );
   return res;
 });
 
-userRoutes.delete("/users/:id", async (context) => {
-  const id = context.params.id;
-  const res = await routeErrorHandler(context, () => userService.delete(id));
-  return res;
-});
+// userRoutes.delete("/users/:id", async (context) => {
+//   const id = context.params.id;
+//   const res = await routeErrorHandler(context, () => userService.repository.delete(id));
+//   return res;
+// });

@@ -1,5 +1,10 @@
-import prismaDb from "../bd/prisma/prisma";
-import { Color, CreateColor } from "../types/types";
+import prismaDb from "../prisma";
+import { Color, CreateColor } from "../../types/types";
+import createRepository from "./baseRepository";
+const colorRepository = createRepository<Color, CreateColor, {}, "colors">(
+  "colors",
+);
+
 
 const createColor = async (color: CreateColor): Promise<Color | null> => {
   try {
@@ -19,4 +24,4 @@ const removeColor = async (id: number): Promise<Color | null> => {
     return null;
   }
 };
-export default { createColor, removeColor };
+export default { ...colorRepository };

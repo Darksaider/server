@@ -2,8 +2,10 @@ import { z } from "zod";
 
 // Схеми для створення нових записів (без id, created_at, updated_at)
 export const createUserSchema = z.object({
-  name: z.string().nonempty({ message: "Ім'я не може бути пустим" }),
+  first_name: z.string().nonempty({ message: "Ім'я не може бути пустим" }),
+  last_name: z.string().nonempty(({ message: "Прізвище  не може бути пустим" })),
   email: z.string().email({ message: "Некоректний формат email" }),
+  phone_number: z.string().nonempty({ message: "Номер не може бути пустим" }),
   password_hash: z.string().nonempty({ message: "Пароль не може бути пустим" }),
   avatar_url: z.string().optional(),
   role: z.string().optional(),
@@ -109,3 +111,55 @@ export const createProduct_tagsSchema = z.object({
   product_id: z.number({ required_error: "Поле product_id є обов'язковим" }),
   tag_id: z.number({ required_error: "Поле tag_id є обов'язковим" }),
 });
+
+// src/schemas/upload.schema.ts
+import { t } from 'elysia';
+
+// Схема для завантаження одного файлу (якщо потрібна)
+export const uploadSingleBodySchema = t.Object({
+  image: t.File({
+    maxSize: '5m',
+    types: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+  }),
+  // Можна додати інші поля, якщо вони потрібні
+  // description: t.Optional(t.String())
+});
+
+// Схема для завантаження кількох файлів
+export const uploadMultipleBodySchema = t.Object({
+  images: t.Array(
+    t.File({
+      maxSize: '5m', // Макс. розмір для кожного файлу
+      types: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+    }),
+    {
+      minItems: 1,      // Мінімум 1 файл
+      // maxItems: 10,  // Максимум 10 файлів (опціонально)
+    }
+  ),
+  // Можна додати інші поля, якщо вони потрібні
+  // category: t.Optional(t.String())
+});
+
+// src/modules/products/product.types.ts
+
+// Описуємо структуру даних, яку очікуємо отримати в тілі запиту
+// після того, як ваша власна валідація відпрацювала.
+export interface CreateProductInput {
+  id?: number;
+  name: string;
+  description?: string | null; // Дозволяємо null, якщо ваша валідація це пропускає
+  price: number; // Припускаємо, що ціна вже конвертована в число
+  stock?: number | null;
+  sales_count?: number | null;
+  product_brands: number;
+  product_categories: number[];
+  product_colors: number[];
+  product_sizes: number[];
+  product_tags?: number[] | null;
+  // product_photos: Array<{
+  //   photo_url: string;
+  //   position?: number | null;
+  // }>;
+  // product_discounts?: number[] | null;
+}

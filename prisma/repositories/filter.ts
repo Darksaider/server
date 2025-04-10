@@ -1,0 +1,29 @@
+import prismaDb from "../prisma";
+
+export async function getUniqueProductAttributes() {
+  const colors = await prismaDb.colors.findMany({
+    where: { product_colors: { some: {} } },
+    select: { id: true, name: true, hex_code: true },
+  });
+
+  const tags = await prismaDb.tags.findMany({
+    where: { product_tags: { some: {} } },
+    select: { id: true, name: true },
+  });
+  const brands = await prismaDb.brands.findMany({
+    where: { product_brands: { some: {} } },
+    select: { id: true, name: true },
+  });
+
+  const categories = await prismaDb.categories.findMany({
+    where: { product_categories: { some: {} } },
+    select: { id: true, name: true },
+  });
+
+  const sizes = await prismaDb.sizes.findMany({
+    where: { product_sizes: { some: {} } },
+    select: { id: true, size: true },
+  });
+
+  return { colors, tags, categories, sizes, brands };
+}

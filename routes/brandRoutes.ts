@@ -1,37 +1,54 @@
 import Elysia from "elysia";
 import brandService from "../services/BrandService";
 import { CreateBrand } from "../types/types";
-export const brandRoutes = new Elysia();
-brandRoutes.get("/getBrands", async (context) => {
-  const { set } = context;
-  try {
-    const brands = await brandService.getBrands();
-    if (!brands) {
-      set.status = 404;
-      return { message: "Brands not found" };
+import { routeErrorHandler } from "../utils/errors";
+import jwtMiddleware from "../Middleware/JwtMiddleware";
+export const brandRoutes = new Elysia()
+  .use(jwtMiddleware)
+  .get("/brands", async (context) => {
+    const res = await routeErrorHandler(context, () =>
+      brandService.getAll(),
+    );
+    return res;
+
+  })
+  .post("/brands", async (context) => {
+    const { hasRole, set } = context
+    if (!hasRole("admin")) {
+      set.status = 403;
+      return { message: "Відмовлено у доступі" };
     }
-    return brands;
-  } catch (error: any) {
-    console.error("Error in route /brands:", error);
-    set.status = 500;
-    return { message: error.message || "Failed to fetch brands" };
+    const data = context.body as CreateBrand
+    const res = await routeErrorHandler(context, () =>
+      brandService.createBrand(data),
+    );
+    return res;
+  });
+brandRoutes.put("/brands/:id", async (context) => {
+  const { set, hasRole } = context
+  if (!hasRole("admin")) {
+    set.status = 403;
+    return { message: "Відмовлено у доступі" };
   }
+  const data = context.body as CreateBrand
+  const params = context.params
+
+  const res = await routeErrorHandler(context, () =>
+    brandService.updateBrand(+params, data),
+  );
+  return res;
 });
-brandRoutes.post("/createBrand", async ({ body }) => {
-  const data = body as CreateBrand;
-  try {
-    const newBrand = await brandService.createBrand(data);
-    return {
-      success: true,
-      message: "Brand created successfully",
-      data: { ...newBrand },
-    };
-  } catch (error) {
-    console.error("Error creating brand:", error);
-    return {
-      success: false,
-      message: "Failed to create brand",
-      error: error,
-    };
+brandRoutes.delete("/brands/:id", async (context) => {
+  const { set, hasRole } = context
+  if (!hasRole("admin")) {
+    set.status = 403;
+    return { message: "Відмовлено у доступі" };
   }
+  const data = context.body as CreateBrand
+  const params = context.params
+
+  const res = await routeErrorHandler(context, () =>
+    brandService.delete(+params),
+  );
+  return res;
 });

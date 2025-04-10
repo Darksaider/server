@@ -163,6 +163,10 @@ export type CreateTag = Omit<tags, "id" | "product_tags">;
 
 // Типи для users
 export type User = users;
+export type LoginUser = {
+  email: string,
+  password_hash: string
+};
 export type createUser = Omit<
   users,
   "id" | "created_at" | "updated_at" | "cart" | "favorites"
@@ -173,19 +177,19 @@ export type UpdateUser = Partial<
 
 export type Filter<T> = {
   [K in keyof T]?:
-    | T[K]
-    | {
-        equals?: T[K];
-        in?: T[K][];
-        notIn?: T[K][];
-        lt?: T[K];
-        lte?: T[K];
-        gt?: T[K];
-        gte?: T[K];
-        contains?: string;
-        startsWith?: string;
-        endsWith?: string;
-      };
+  | T[K]
+  | {
+    equals?: T[K];
+    in?: T[K][];
+    notIn?: T[K][];
+    lt?: T[K];
+    lte?: T[K];
+    gt?: T[K];
+    gte?: T[K];
+    contains?: string;
+    startsWith?: string;
+    endsWith?: string;
+  };
 };
 export type ProductFilter = {
   OR?: ProductFilter[];

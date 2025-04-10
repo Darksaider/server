@@ -1,6 +1,6 @@
 // utils/errors.ts
 import { Context } from "elysia";
-import { sendCopyResponse } from "./response";
+import { sendResponse } from "./response";
 
 export class RepositoryError extends Error {
   constructor(
@@ -77,7 +77,7 @@ export const routeErrorHandler = async <T>(
 ) => {
   try {
     const data = await fn();
-    return sendCopyResponse(context, successStatus, true, "Успіх", data);
+    return sendResponse(context, successStatus, true, "Успіх", data);
   } catch (error: unknown) {
     let statusCode = 500;
     let errorMessage = "Внутрішня помилка сервера";
@@ -98,7 +98,7 @@ export const routeErrorHandler = async <T>(
       }
     }
 
-    return sendCopyResponse(
+    return sendResponse(
       context,
       statusCode,
       false,

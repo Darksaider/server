@@ -23,7 +23,7 @@ export interface IRepository<
 }
 
 export interface IService<T> {
-  getAll(config: FindManyConfig<T>): Promise<T[]>;
+  getAll(config?: FindManyConfig<T>): Promise<T[]>;
   getById(id: number | string): Promise<T | null>;
   create<Schema extends ZodSchema>(schema: Schema, item: unknown): Promise<T>;
   update<Schema extends ZodSchema>(
@@ -48,5 +48,4 @@ export interface FindManyConfig<T> {
   skip?: number;
   take?: number;
   include?: any;
-  customWhere?: any;
 }

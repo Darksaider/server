@@ -1,8 +1,8 @@
 import { CreateTag, createUser, Tag, UpdateUser, User } from "../types/types";
-import { createTagSchema } from "../bd/prisma/schemas";
+import { createTagSchema } from "../prisma/schemas";
 import createService from "./baseService";
-import createRepository from "../repositories/baseRepository";
-const tagRepository = createRepository<User, createUser, UpdateUser, "tags">(
+import createRepository from "../prisma/repositories/baseRepository";
+const tagRepository = createRepository<Tag, CreateTag, {}, "tags">(
   "tags",
 );
 const tagService = createService<Tag>(tagRepository);

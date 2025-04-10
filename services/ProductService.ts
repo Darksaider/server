@@ -1,11 +1,10 @@
 // user.service.ts
 import { CreateProduct, Product } from "../types/types";
-import { createProductSchema } from "../bd/prisma/schemas";
+import { createProductSchema } from "../prisma/schemas";
 import createService from "./baseService";
-import productRepository from "../repositories/productRepository";
+import productRepository from "../prisma/repositories/productRepository";
 import { handleServiceError } from "../utils/errors";
 import { FindManyConfig } from "../types/interfaces";
-import prismaDb from "../bd/prisma/prisma";
 const productService = createService<Product>(productRepository);
 const productInclude = {
   product_discounts: {
@@ -53,14 +52,22 @@ const getProducts = async (config: FindManyConfig<Product>) => {
 
 const getProductById = async (id: number) => {
   return await handleServiceError(
-    () => productRepository.findProductById(id, { include: productInclude }),
+    () => productRepository.findById(id, { include: productInclude }),
     ``,
   );
+
 };
 
+const getProductsByNewFilter = async (filter: any) => {
+  return await handleServiceError(
+    () => productRepository.getProductsByNewFilter(filter),
+    "Failed to get product",
+  );
+};
 export default {
   ...productService,
   createProduct,
   getProducts,
   getProductById,
+  getProductsByNewFilter
 };
