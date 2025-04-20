@@ -20,9 +20,11 @@
     "dotenv": "^16.4.7",
     "elysia": "^1.2.22",
     "googleapis": "^144.0.0",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "stripe": "^18.0.0"
   },
   "devDependencies": {
+    "@types/stripe": "^8.0.417",
     "bun-types": "latest",
     "prettier": "3.4.2",
     "prisma": "^6.4.1",

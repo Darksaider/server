@@ -4,7 +4,7 @@ import { routeErrorHandler } from "../utils/errors";
 import categoryService from "../services/CategoryService";
 export const categoryRoutes = new Elysia();
 
-categoryRoutes.post("/category", async (context) => {
+categoryRoutes.post("/categories", async (context) => {
   const res = await routeErrorHandler(
     context,
     async () => categoryService.createCategory(context.body as CreateCategory),

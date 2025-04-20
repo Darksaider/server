@@ -1,18 +1,23 @@
 // src/routes/upload.routes.ts
-import { Elysia } from 'elysia';
-import { uploadFileToCloudinary } from '../services/ImageService';
-import { uploadMultipleBodySchema, uploadSingleBodySchema } from '../prisma/schemas';
+import { Elysia } from "elysia";
+import { uploadFileToCloudinary } from "../services/ImageServices";
+import {
+  uploadMultipleBodySchema,
+  uploadSingleBodySchema,
+} from "../prisma/schemas";
 
-// Створюємо екземпляр Elysia спеціально для цих роутів з префіксом
-export const uploadRoutes = new Elysia({ prefix: '/upload' })
+export const uploadRoutes = new Elysia({ prefix: "/upload" })
   // --- Маршрут для завантаження ОДНОГО файлу ---
   .post(
-    '/single',
+    "/single",
     async ({ body, set }) => {
-      console.log('Отримано запит на /upload/single');
+      console.log("Отримано запит на /upload/single");
       const file = body.image; // 'image' з uploadSingleBodySchema
 
-      const result = await uploadFileToCloudinary(file, 'elysia_uploads_single'); // Виклик сервісу
+      const result = await uploadFileToCloudinary(
+        file,
+        "elysia_uploads_single"
+      ); // Виклик сервісу
 
       if (!result.success) {
         set.status = 500; // Internal Server Error (або 400, залежно від помилки)
@@ -27,20 +32,18 @@ export const uploadRoutes = new Elysia({ prefix: '/upload' })
   )
 
   .post(
-    '/multiple',
+    "/multiple",
     async ({ body, set }) => {
-      console.log('Отримано запит на /upload/multiple');
+      console.log("Отримано запит на /upload/multiple");
       const files = body.images;
 
       console.log(`Отримано ${files.length} файлів для завантаження.`);
 
-
       const uploadPromises = files.map((file) =>
-        uploadFileToCloudinary(file, 'elysia_uploads_multiple')
+        uploadFileToCloudinary(file, "elysia_uploads_multiple")
       );
 
       const results = await Promise.allSettled(uploadPromises);
-
 
       const successfulUploads: any[] = [];
       const uploadErrors: any[] | undefined = [];
@@ -48,8 +51,7 @@ export const uploadRoutes = new Elysia({ prefix: '/upload' })
       results.forEach((result, index) => {
         const originalFileName = files[index]?.name || `файл #${index + 1}`;
 
-        if (result.status === 'fulfilled') {
-
+        if (result.status === "fulfilled") {
           if (result.value.success) {
             successfulUploads.push(result.value);
           } else {
@@ -59,21 +61,22 @@ export const uploadRoutes = new Elysia({ prefix: '/upload' })
             });
           }
         } else {
-          // Непередбачена помилка самого промісу (мало б бути рідко)
           uploadErrors.push({
             filename: originalFileName,
-            error: result.reason?.message || 'Не вдалося обробити завантаження',
+            error: result.reason?.message || "Не вдалося обробити завантаження",
           });
         }
       });
 
-      console.log(`Успішно завантажено: ${successfulUploads.length}, Помилок: ${uploadErrors.length}`);
+      console.log(
+        `Успішно завантажено: ${successfulUploads.length}, Помилок: ${uploadErrors.length}`
+      );
 
       if (successfulUploads.length === 0 && uploadErrors.length > 0) {
         set.status = 500;
         return {
           success: false,
-          message: 'Не вдалося завантажити жоден файл.',
+          message: "Не вдалося завантажити жоден файл.",
           errors: uploadErrors,
         };
       }
@@ -90,4 +93,4 @@ export const uploadRoutes = new Elysia({ prefix: '/upload' })
     }
   );
 
-console.log('Роути завантаження (/upload/single, /upload/multiple) визначено.');
+console.log("Роути завантаження (/upload/single, /upload/multiple) визначено.");

@@ -13,15 +13,18 @@ import { tagRoutes } from "../routes/tagRoutes";
 import jwtMiddleware from "../Middleware/JwtMiddleware";
 import { AddProductRoutes } from "../routes/productsRoutes";
 import { categoryRoutes } from "../routes/categoryRoutes";
+import { favoritesRoutes } from "../routes/favoriteRoutes";
+import { cartRoutes } from "../routes/cartRoutes";
+import { uploadRoutes } from "../routes/ImageRouter";
 
 const app = new Elysia();
 
 app.use(
   cors({
-    origin: "http://localhost:5173", // Your frontend origin
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
+    origin: "http://localhost:5173", // ВАШ ФРОНТЕНД URL
+    credentials: true, // Дозволити надсилати куки
+    allowedHeaders: ["Content-Type" /* 'Authorization', */], // Дозволені заголовки
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Дозволені методи
   })
 );
 
@@ -37,6 +40,9 @@ app.use(colorRoutes);
 app.use(tagRoutes);
 app.use(AddProductRoutes);
 app.use(categoryRoutes);
+app.use(favoritesRoutes);
+app.use(cartRoutes);
+app.use(uploadRoutes);
 
 app.onStop(disconnectDb);
 app.listen(3000, () => console.log("Server listening on port 3000 🚀"));

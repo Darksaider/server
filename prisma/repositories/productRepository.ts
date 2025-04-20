@@ -22,11 +22,14 @@ const getProducts = async (config: FindManyConfig<Product>) => {
 };
 
 const getProductsByNewFilter = async (filter: any) => {
-  console.log(filter);
-
   try {
     const products = await prismaDb.products.findMany(filter);
-    return products;
+    const productsCourt = await prismaDb.products.count({
+      where: {
+        ...filter.where,
+      },
+    });
+    return { products, productsCourt };
   } catch (error) {
     throw new RepositoryError("Не вдалося отримати продукти", error);
   }

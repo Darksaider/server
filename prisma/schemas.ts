@@ -3,7 +3,7 @@ import { z } from "zod";
 // Схеми для створення нових записів (без id, created_at, updated_at)
 export const createUserSchema = z.object({
   first_name: z.string().nonempty({ message: "Ім'я не може бути пустим" }),
-  last_name: z.string().nonempty(({ message: "Прізвище  не може бути пустим" })),
+  last_name: z.string().nonempty({ message: "Прізвище  не може бути пустим" }),
   email: z.string().email({ message: "Некоректний формат email" }),
   phone_number: z.string().nonempty({ message: "Номер не може бути пустим" }),
   password_hash: z.string().nonempty({ message: "Пароль не може бути пустим" }),
@@ -113,13 +113,13 @@ export const createProduct_tagsSchema = z.object({
 });
 
 // src/schemas/upload.schema.ts
-import { t } from 'elysia';
+import { t } from "elysia";
 
 // Схема для завантаження одного файлу (якщо потрібна)
 export const uploadSingleBodySchema = t.Object({
   image: t.File({
-    maxSize: '5m',
-    types: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+    maxSize: "5m",
+    types: ["image/jpeg", "image/png", "image/webp", "image/gif"],
   }),
   // Можна додати інші поля, якщо вони потрібні
   // description: t.Optional(t.String())
@@ -129,11 +129,11 @@ export const uploadSingleBodySchema = t.Object({
 export const uploadMultipleBodySchema = t.Object({
   images: t.Array(
     t.File({
-      maxSize: '5m', // Макс. розмір для кожного файлу
-      types: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+      maxSize: "5m", // Макс. розмір для кожного файлу
+      types: ["image/jpeg", "image/png", "image/webp", "image/gif"],
     }),
     {
-      minItems: 1,      // Мінімум 1 файл
+      minItems: 1, // Мінімум 1 файл
       // maxItems: 10,  // Максимум 10 файлів (опціонально)
     }
   ),
@@ -157,9 +157,10 @@ export interface CreateProductInput {
   product_colors: number[];
   product_sizes: number[];
   product_tags?: number[] | null;
-  // product_photos: Array<{
-  //   photo_url: string;
-  //   position?: number | null;
-  // }>;
+  product_photos: {
+    newFiles: File[];
+    existingImagesIds: string[];
+    imagesToDelete: number[];
+  };
   // product_discounts?: number[] | null;
 }

@@ -27,3 +27,27 @@ export async function getUniqueProductAttributes() {
 
   return { colors, tags, categories, sizes, brands };
 }
+
+export async function getAllProductAttributes() {
+  const colors = await prismaDb.colors.findMany({
+    select: { id: true, name: true, hex_code: true },
+  });
+
+  const tags = await prismaDb.tags.findMany({
+    select: { id: true, name: true },
+  });
+
+  const brands = await prismaDb.brands.findMany({
+    select: { id: true, name: true },
+  });
+
+  const categories = await prismaDb.categories.findMany({
+    select: { id: true, name: true },
+  });
+
+  const sizes = await prismaDb.sizes.findMany({
+    select: { id: true, size: true },
+  });
+
+  return { colors, tags, categories, sizes, brands };
+}

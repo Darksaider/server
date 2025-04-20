@@ -1,10 +1,31 @@
 // src/modules/products/product.service.ts
 import { Prisma } from "@prisma/client";
-import prismaDb from "../prisma/prisma"; // Припускаємо, що цей шлях правильний
-// Припускаємо, що CreateProductInput визначає product_brands як number або string, а не масив
-import { CreateProductInput } from "../prisma/schemas";
+import prismaDb from "../prisma/prisma";
 
-// Функція створення (з виправленням для одного бренду, як у вашому коді)
+// Допоміжний інтерфейс для структури фото
+interface ProductPhotoInput {
+  photo_url: string;
+  cloudinary_public_id: string;
+}
+
+// Оновлений інтерфейс для вхідних даних
+interface CreateProductInput {
+  name: string;
+  description?: string | null;
+  price: Prisma.Decimal | number;
+  stock?: number | null;
+  sales_count?: number | null;
+  product_brands: number;
+  product_categories: number[];
+  product_colors: number[];
+  product_sizes: number[];
+  product_tags?: number[] | null;
+  product_photos?: ProductPhotoInput[] | null; // Для створення продукту
+  new_product_photos?: ProductPhotoInput[] | null; // Для оновлення - нові фото
+  photos_to_delete?: string[] | null; // Для оновлення - ID фото для видалення
+}
+
+// Функція створення продукту
 async function createProductWithRelations(data: CreateProductInput) {
   const {
     name,
@@ -12,15 +33,30 @@ async function createProductWithRelations(data: CreateProductInput) {
     price,
     stock,
     sales_count,
-    product_brands, // Одне значення ID бренду
+    product_brands,
     product_categories,
     product_colors,
     product_sizes,
     product_tags,
-    // product_photos,
-    // product_discounts
+    product_photos,
   } = data;
 
+  // Підготовка фото для створення
+  const photosToCreate = (Array.isArray(product_photos) ? product_photos : [])
+    .filter(
+      (p): p is ProductPhotoInput =>
+        p &&
+        typeof p.photo_url === "string" &&
+        p.photo_url.trim() !== "" &&
+        typeof p.cloudinary_public_id === "string" &&
+        p.cloudinary_public_id.trim() !== ""
+    )
+    .map((p) => ({
+      photo_url: p.photo_url,
+      cloudinary_public_id: p.cloudinary_public_id,
+    }));
+
+  // Створення продукту в транзакції
   const newProduct = await prismaDb.$transaction(async (tx) => {
     const createdProduct = await tx.products.create({
       data: {
@@ -29,25 +65,43 @@ async function createProductWithRelations(data: CreateProductInput) {
         price,
         stock: stock ?? 0,
         sales_count: sales_count ?? 0,
+        // Зв'язок з брендом
         product_brands: {
-          // Створюємо один запис у проміжній таблиці
           create: { brand_id: product_brands },
         },
+        // Зв'язки багато-до-багатьох
         product_categories: {
-          create: product_categories.map(categoryId => ({ category_id: categoryId })),
+          create: product_categories.map((categoryId) => ({
+            category_id: categoryId,
+          })),
         },
         product_colors: {
-          create: product_colors.map(colorId => ({ color_id: colorId })),
+          create: product_colors.map((colorId) => ({ color_id: colorId })),
         },
         product_sizes: {
-          create: product_sizes.map(sizeId => ({ size_id: sizeId })),
+          create: product_sizes.map((sizeId) => ({ size_id: sizeId })),
         },
-        ...(product_tags && product_tags.length > 0 && {
-          product_tags: {
-            create: product_tags.map(tagId => ({ tag_id: tagId })),
+        // Умовне додавання тегів
+        ...(product_tags &&
+          product_tags.length > 0 && {
+            product_tags: {
+              create: product_tags.map((tagId) => ({ tag_id: tagId })),
+            },
+          }),
+        // Додавання фото
+        ...(photosToCreate.length > 0 && {
+          product_photos: {
+            create: photosToCreate,
           },
         }),
-        // ... product_photos, product_discounts ...
+      },
+      include: {
+        product_photos: true,
+        product_brands: { include: { brands: true } },
+        product_categories: { include: { categories: true } },
+        product_colors: { include: { colors: true } },
+        product_sizes: { include: { sizes: true } },
+        product_tags: { include: { tags: true } },
       },
     });
     return createdProduct;
@@ -55,77 +109,123 @@ async function createProductWithRelations(data: CreateProductInput) {
   return newProduct;
 }
 
-// Функція оновлення з ВИПРАВЛЕНИМ блоком product_brands
-async function updateProductWithRelations(productId: number, data: CreateProductInput) {
+// Оновлена функція оновлення продукту
+async function updateProductWithRelations(
+  productId: number,
+  data: CreateProductInput
+) {
   const {
     name,
     description,
     price,
     stock,
     sales_count,
-    product_brands, // Одне значення ID бренду
+    product_brands,
     product_categories,
     product_colors,
     product_sizes,
     product_tags,
-    // product_photos,
-    // product_discounts
+    new_product_photos,
+    photos_to_delete,
   } = data;
 
   try {
-    const updatedProduct = await prismaDb.products.update({
-      where: { id: productId },
-      data: {
-        name,
-        description: description ?? undefined,
-        price,
-        stock: stock ?? 0,
-        sales_count: sales_count ?? 0,
-        updated_at: new Date(),
-
-        product_brands: {
-          deleteMany: {}, // Видаляємо ВСІ попередні зв'язки з брендами для цього продукту
-          // --- ВИПРАВЛЕНО ---
-          // Створюємо ОДИН новий зв'язок з брендом, використовуючи наданий ID
-          create: {
-            brand_id: product_brands,
+    return await prismaDb.$transaction(async (tx) => {
+      // 1. Якщо є фото для видалення, видаляємо їх
+      if (photos_to_delete && photos_to_delete.length > 0) {
+        await tx.product_photos.deleteMany({
+          where: {
+            cloudinary_public_id: { in: photos_to_delete },
           },
-          // -------------------
-        },
-        product_categories: {
-          deleteMany: {},
-          create: product_categories.map(categoryId => ({
-            category_id: categoryId,
-          })),
-        },
-        product_colors: {
-          deleteMany: {},
-          create: product_colors.map(colorId => ({
-            color_id: colorId,
-          })),
-        },
-        product_sizes: {
-          deleteMany: {},
-          create: product_sizes.map(sizeId => ({
-            size_id: sizeId,
-          })),
-        },
-        ...(product_tags !== undefined && {
-          product_tags: {
-            deleteMany: {},
-            create: (product_tags || []).map(tagId => ({
-              tag_id: tagId,
-            })),
-          }
-        }),
-        // ... product_photos, product_discounts ...
-      },
-      // include: { ... } // Опціонально
-    });
-    return updatedProduct;
+        });
+      }
 
+      // 2. Якщо є нові фото, перевіряємо і готуємо їх для додавання
+      const photosToAdd = (
+        Array.isArray(new_product_photos) ? new_product_photos : []
+      )
+        .filter(
+          (p): p is ProductPhotoInput =>
+            p &&
+            typeof p.photo_url === "string" &&
+            p.photo_url.trim() !== "" &&
+            typeof p.cloudinary_public_id === "string" &&
+            p.cloudinary_public_id.trim() !== ""
+        )
+        .map((p) => ({
+          product_id: productId,
+          photo_url: p.photo_url,
+          cloudinary_public_id: p.cloudinary_public_id,
+        }));
+
+      // 3. Додаємо нові фото, якщо вони є
+      if (photosToAdd.length > 0) {
+        await tx.product_photos.createMany({
+          data: photosToAdd,
+        });
+      }
+
+      // 4. Оновлюємо сам продукт та його зв'язки
+      const updatedProduct = await tx.products.update({
+        where: { id: productId },
+        data: {
+          name,
+          description: description ?? undefined,
+          price,
+          stock: stock ?? 0,
+          sales_count: sales_count ?? 0,
+          updated_at: new Date(),
+
+          // Оновлення зв'язків (видалити старі, створити нові)
+          product_brands: {
+            deleteMany: {},
+            create: { brand_id: product_brands },
+          },
+          product_categories: {
+            deleteMany: {},
+            create: product_categories.map((categoryId) => ({
+              category_id: categoryId,
+            })),
+          },
+          product_colors: {
+            deleteMany: {},
+            create: product_colors.map((colorId) => ({
+              color_id: colorId,
+            })),
+          },
+          product_sizes: {
+            deleteMany: {},
+            create: product_sizes.map((sizeId) => ({
+              size_id: sizeId,
+            })),
+          },
+          // Оновлення тегів
+          ...(product_tags !== undefined && {
+            product_tags: {
+              deleteMany: {},
+              create: (product_tags || []).map((tagId) => ({
+                tag_id: tagId,
+              })),
+            },
+          }),
+        },
+        include: {
+          product_photos: true,
+          product_brands: { include: { brands: true } },
+          product_categories: { include: { categories: true } },
+          product_colors: { include: { colors: true } },
+          product_sizes: { include: { sizes: true } },
+          product_tags: { include: { tags: true } },
+        },
+      });
+
+      return updatedProduct;
+    });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
       console.warn(`Update failed: Product with ID ${productId} not found.`);
       return null;
     }
@@ -134,9 +234,8 @@ async function updateProductWithRelations(productId: number, data: CreateProduct
   }
 }
 
-// Не забуваємо експортувати оновлену функцію
+// Експортуємо методи сервісу
 export const productService = {
   createProductWithRelations,
-  updateProductWithRelations, // Додаємо функцію оновлення до експорту
-  // ... інші методи сервісу
+  updateProductWithRelations,
 };

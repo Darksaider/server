@@ -21,7 +21,7 @@ interface JwtPayload {
 }
 
 // Використовуємо Elysia для створення JWT
-const loginUser = async (user: LoginUser, ctx: ElysiaContext): Promise<string> => {
+const loginUser = async (user: LoginUser, ctx: ElysiaContext) => {
   const existingUser = await userRepository.LoginUser(user);
 
   if (!existingUser) {
@@ -35,9 +35,14 @@ const loginUser = async (user: LoginUser, ctx: ElysiaContext): Promise<string> =
     role: role,
   };
 
-  // Використовуємо ctx.jwt для підпису токена
-  const token = await ctx.jwt.sign(payload); // ctx.jwt вже доступний
-  return token;
+  const token = await ctx.jwt.sign(payload);
+  const data = {
+    user: {
+      ...payload,
+    },
+    token: token,
+  };
+  return data;
 };
 
 const createUser = async (user: createUser): Promise<User> => {

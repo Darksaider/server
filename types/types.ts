@@ -24,7 +24,10 @@ export type CreateBrand = Omit<brands, "id" | "product_brands">;
 
 // Типи для cart
 export type Cart = cart;
-export type CreateCart = Omit<cart, "id" | "added_at" | "user" | "product">;
+export type CreateCart = Omit<
+  cart,
+  "id" | "added_at" | "user" | "product" | "user_id"
+>;
 
 // Типи для categories
 export type Category = categories;
@@ -142,6 +145,33 @@ interface ProductSizeWithSize extends ProductSize {
 interface ProductTagWithTag extends ProductTag {
   tag: Tag;
 }
+export interface ProductApiRequest {
+  productData: string;
+
+  new_photos?: File | File[];
+
+  photos_to_delete?: string;
+}
+export type UploadErrorResult = {
+  success: false;
+  original_filename: string;
+  message: string;
+};
+
+export type UploadSuccessResult = {
+  success: true;
+  original_filename?: string;
+  url: string;
+  public_id: string;
+  format?: string;
+  resource_type?: string;
+};
+export type UploadResult = {
+  success: boolean;
+  url?: string;
+  public_id?: string;
+  message?: string;
+};
 export type ProductWithRelations = Product & {
   discountedPrice?: number;
   categories_products: CategoriesProduct[];
@@ -164,8 +194,8 @@ export type CreateTag = Omit<tags, "id" | "product_tags">;
 // Типи для users
 export type User = users;
 export type LoginUser = {
-  email: string,
-  password_hash: string
+  email: string;
+  password_hash: string;
 };
 export type createUser = Omit<
   users,
@@ -177,19 +207,19 @@ export type UpdateUser = Partial<
 
 export type Filter<T> = {
   [K in keyof T]?:
-  | T[K]
-  | {
-    equals?: T[K];
-    in?: T[K][];
-    notIn?: T[K][];
-    lt?: T[K];
-    lte?: T[K];
-    gt?: T[K];
-    gte?: T[K];
-    contains?: string;
-    startsWith?: string;
-    endsWith?: string;
-  };
+    | T[K]
+    | {
+        equals?: T[K];
+        in?: T[K][];
+        notIn?: T[K][];
+        lt?: T[K];
+        lte?: T[K];
+        gt?: T[K];
+        gte?: T[K];
+        contains?: string;
+        startsWith?: string;
+        endsWith?: string;
+      };
 };
 export type ProductFilter = {
   OR?: ProductFilter[];

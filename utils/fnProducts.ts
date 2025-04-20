@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from "@prisma/client";
 
 // Типи для параметрів фільтрації
 export interface ProductFilterParams {
@@ -11,7 +11,7 @@ export interface ProductFilterParams {
   sizes?: number[];
   tags?: number[];
   inStock?: boolean;
-  sortBy?: 'price_asc' | "id_desc" | 'price_desc' | 'newest' | 'popular';
+  sortBy?: "price_asc" | "id_desc" | "price_desc" | "newest" | "popular";
   page?: number;
   limit?: number;
 }
@@ -23,8 +23,8 @@ export function buildProductFilters(filters: ProductFilterParams) {
   // Текстовий пошук
   if (filters.search) {
     where.OR = [
-      { name: { contains: filters.search, mode: 'insensitive' } },
-      { description: { contains: filters.search, mode: 'insensitive' } }
+      { name: { contains: filters.search, mode: "insensitive" } },
+      { description: { contains: filters.search, mode: "insensitive" } },
     ];
   }
 
@@ -43,8 +43,8 @@ export function buildProductFilters(filters: ProductFilterParams) {
   if (filters.categories && filters.categories.length > 0) {
     where.product_categories = {
       some: {
-        category_id: { in: filters.categories }
-      }
+        category_id: { in: filters.categories },
+      },
     };
   }
 
@@ -52,8 +52,8 @@ export function buildProductFilters(filters: ProductFilterParams) {
   if (filters.brands && filters.brands.length > 0) {
     where.product_brands = {
       some: {
-        brand_id: { in: filters.brands }
-      }
+        brand_id: { in: filters.brands },
+      },
     };
   }
 
@@ -61,8 +61,8 @@ export function buildProductFilters(filters: ProductFilterParams) {
   if (filters.colors && filters.colors.length > 0) {
     where.product_colors = {
       some: {
-        color_id: { in: filters.colors }
-      }
+        color_id: { in: filters.colors },
+      },
     };
   }
 
@@ -70,8 +70,8 @@ export function buildProductFilters(filters: ProductFilterParams) {
   if (filters.sizes && filters.sizes.length > 0) {
     where.product_sizes = {
       some: {
-        size_id: { in: filters.sizes }
-      }
+        size_id: { in: filters.sizes },
+      },
     };
   }
 
@@ -79,8 +79,8 @@ export function buildProductFilters(filters: ProductFilterParams) {
   if (filters.tags && filters.tags.length > 0) {
     where.product_tags = {
       some: {
-        tag_id: { in: filters.tags }
-      }
+        tag_id: { in: filters.tags },
+      },
     };
   }
 
@@ -91,28 +91,28 @@ export function buildProductFilters(filters: ProductFilterParams) {
 
   // Налаштування сортування
   switch (filters.sortBy) {
-    case 'price_asc':
-      orderBy.price = 'asc';
+    case "price_asc":
+      orderBy.price = "asc";
       break;
-    case 'id_desc':
-      orderBy.id = 'desc';
+    case "id_desc":
+      orderBy.id = "desc";
       break;
-    case 'price_desc':
-      orderBy.price = 'desc';
+    case "price_desc":
+      orderBy.price = "desc";
       break;
-    case 'newest':
-      orderBy.created_at = 'desc';
+    case "newest":
+      orderBy.created_at = "desc";
       break;
-    case 'popular':
-      orderBy.sales_count = 'desc';
+    case "popular":
+      orderBy.sales_count = "desc";
       break;
     default:
-      orderBy.id = 'asc';
+      orderBy.id = "asc";
   }
 
   // Налаштування пагінації
   const page = filters.page || 1;
-  const limit = filters.limit || 10;
+  const limit = filters.limit || 12;
   const skip = (page - 1) * limit;
 
   // Стандартні зв'язки для продуктів
@@ -120,35 +120,34 @@ export function buildProductFilters(filters: ProductFilterParams) {
     product_photos: true,
     product_brands: {
       include: {
-        brands: true
-      }
+        brands: true,
+      },
     },
     product_categories: {
       include: {
-        categories: true
-      }
-
+        categories: true,
+      },
     },
     product_colors: {
       include: {
-        colors: true
-      }
+        colors: true,
+      },
     },
     product_sizes: {
       include: {
-        sizes: true
-      }
+        sizes: true,
+      },
     },
     product_tags: {
       include: {
-        tags: true
-      }
+        tags: true,
+      },
     },
     product_discounts: {
       include: {
-        discounts: true
-      }
-    }
+        discounts: true,
+      },
+    },
   };
 
   return {
@@ -156,12 +155,14 @@ export function buildProductFilters(filters: ProductFilterParams) {
     orderBy,
     skip,
     take: limit,
-    include
+    include,
   };
 }
 
 // Функція для парсингу параметрів запиту
-export function parseProductFilters(query: Record<string, any>): ProductFilterParams {
+export function parseProductFilters(
+  query: Record<string, any>
+): ProductFilterParams {
   const filters: ProductFilterParams = {};
 
   // Текстовий пошук
@@ -187,29 +188,33 @@ export function parseProductFilters(query: Record<string, any>): ProductFilterPa
     }
 
     // Якщо передано як рядок з комами
-    if (typeof query[param] === 'string' && query[param].includes(',')) {
-      return query[param].split(',').map(Number);
+    if (typeof query[param] === "string" && query[param].includes(",")) {
+      return query[param].split(",").map(Number);
     }
 
     // Якщо передано як одиночне значення
     return [Number(query[param])];
   };
 
-  filters.categories = parseArrayParam('categories');
-  filters.brands = parseArrayParam('brands');
-  filters.colors = parseArrayParam('colors');
-  filters.sizes = parseArrayParam('sizes');
-  filters.tags = parseArrayParam('tags');
+  filters.categories = parseArrayParam("categories");
+  filters.brands = parseArrayParam("brands");
+  filters.colors = parseArrayParam("colors");
+  filters.sizes = parseArrayParam("sizes");
+  filters.tags = parseArrayParam("tags");
 
   // Наявність на складі
   if (query.inStock !== undefined) {
-    filters.inStock = query.inStock === 'true' || query.inStock === true;
+    filters.inStock = query.inStock === "true" || query.inStock === true;
   }
 
   // Сортування
-  const validSortValues = ['price_asc', 'price_desc', 'newest', 'popular'];
+  const validSortValues = ["price_asc", "price_desc", "newest", "popular"];
   if (query.sortBy && validSortValues.includes(String(query.sortBy))) {
-    filters.sortBy = String(query.sortBy) as 'price_asc' | 'price_desc' | 'newest' | 'popular';
+    filters.sortBy = String(query.sortBy) as
+      | "price_asc"
+      | "price_desc"
+      | "newest"
+      | "popular";
   }
 
   // Пагінація

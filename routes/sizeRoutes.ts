@@ -5,19 +5,7 @@ import { routeErrorHandler } from "../utils/errors";
 export const sizeRoutes = new Elysia();
 
 sizeRoutes.get("/sizes", async (context: Context) => {
-  const urlParams = new URLSearchParams(context.request.url.split("?")[1]);
-  const filter: any = {};
-
-  for (const [key, value] of urlParams.entries()) {
-    try {
-      filter[key] = JSON.parse(value);
-    } catch (e) {
-      filter[key] = value;
-    }
-  }
-  const res = await routeErrorHandler(context, () =>
-    sizeService.getById(filter),
-  );
+  const res = await routeErrorHandler(context, () => sizeService.getAll());
   return res;
 });
 sizeRoutes.post("/sizes", async (context) => {
@@ -25,7 +13,7 @@ sizeRoutes.post("/sizes", async (context) => {
   const res = await routeErrorHandler(
     context,
     async () => sizeService.createSize(data),
-    201,
+    201
   );
   return res;
 });

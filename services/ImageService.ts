@@ -1,73 +1,134 @@
-// src/services/cloudinary.service.ts
-import type { UploadApiResponse, UploadApiErrorResponse } from 'cloudinary';
-import cloudinary from '../src/cloudinary';
+import cloudinary from "../src/cloudinary";
+import { UploadResult } from "../types/types";
 
-interface ElysiaFile extends Blob {
-  name: string;
-}
-
-// Тип для успішного результату
-type UploadSuccessResult = {
-  success: true;
-  original_filename: string;
-  url: string;
-  public_id: string;
-  format: string;
-  resource_type: string;
-};
-
-// Тип для помилки
-type UploadErrorResult = {
-  success: false;
-  original_filename: string;
-  message: string;
-};
-
-/**
- * Завантажує один файл на Cloudinary.
- * @param file - Файл для завантаження (очікується тип, що надається Elysia для t.File).
- * @param folder - Опціональна папка на Cloudinary.
- * @returns Результат завантаження (успіх або помилка).
- */
-export const uploadFileToCloudinary = async (
-  file: ElysiaFile,
-  folder: string = 'elysia_uploads' // Папка за замовчуванням
-): Promise<UploadSuccessResult | UploadErrorResult> => {
-
-  console.log(`[Service] Обробка файлу: ${file.name} (${file.size} байт)`);
+export const uploadImage = async (
+  file: File,
+  folder = "elysia_uploads"
+): Promise<UploadResult> => {
   try {
-    // Конвертація у Data URI
+    if (!file || typeof file.arrayBuffer !== "function") {
+      throw new Error("Неправильний формат файлу");
+    }
+
     const buffer = await file.arrayBuffer();
-    const base64String = Buffer.from(buffer).toString('base64');
-    const dataUri = `data:${file.type};base64,${base64String}`;
+    const base64 = Buffer.from(buffer).toString("base64");
+    const dataUrl = `data:${file.type};base64,${base64}`;
 
-    console.log(`[Service] Завантаження файлу ${file.name} на Cloudinary до папки ${folder}...`);
-
-    const result: UploadApiResponse = await cloudinary.uploader.upload(dataUri, {
-      resource_type: 'auto', // Автоматично визначати тип
-      folder: folder, // Використовуємо передану або дефолтну папку
-      // Можна задати public_id на основі імені файлу, але будьте обережні з унікальністю
-      // public_id: `${folder}/${Date.now()}-${file.name.split('.').slice(0, -1).join('.')}`,
+    const result = await cloudinary.uploader.upload(dataUrl, {
+      folder,
     });
 
-    console.log(`[Service] Успішно завантажено: ${file.name} -> ${result.secure_url}`);
     return {
       success: true,
-      original_filename: file.name,
       url: result.secure_url,
       public_id: result.public_id,
-      format: result.format,
-      resource_type: result.resource_type,
     };
-  } catch (error: unknown) {
-    // Типізуємо помилку, яку повертає Cloudinary SDK
-    const uploadError = error as UploadApiErrorResponse;
-    const errorMessage = uploadError?.message || (error instanceof Error ? error.message : 'Невідома помилка під час завантаження');
-    console.error(`[Service] Помилка завантаження файлу ${file.name}:`, errorMessage);
+  } catch (error: any) {
+    console.error("Помилка при завантаженні зображення:", error.message);
     return {
       success: false,
-      original_filename: file.name,
-      message: errorMessage,
+      message: error.message || "Невідома помилка при завантаженні",
+    };
+  }
+};
+
+export const uploadMultipleImages = async (
+  files: File[],
+  folder = "elysia_uploads"
+): Promise<UploadResult[]> => {
+  const results: UploadResult[] = [];
+
+  for (const file of files) {
+    const result = await uploadImage(file, folder);
+    results.push(result);
+  }
+
+  return results;
+};
+
+// Модифікація функції deleteImage для кращої обробки помилок
+export const deleteImage = async (
+  publicId: string
+): Promise<{
+  success: boolean;
+  message?: string;
+}> => {
+  try {
+    // Переконайтеся, що publicId не пустий
+    if (!publicId) {
+      return {
+        success: false,
+        message: "Public ID не може бути пустим",
+      };
+    }
+
+    console.log(`Спроба видалити зображення з ID: ${publicId}`);
+    const result = await cloudinary.uploader.destroy(publicId);
+    console.log(`Результат видалення для ${publicId}:`, result);
+
+    if (result.result === "ok") {
+      return {
+        success: true,
+      };
+    } else if (result.result === "not found") {
+      return {
+        success: false,
+        message: `Зображення з ID ${publicId} не знайдено в Cloudinary`,
+      };
+    } else {
+      return {
+        success: false,
+        message: `Помилка видалення: ${result.result}`,
+      };
+    }
+  } catch (error: any) {
+    console.error(`Помилка при видаленні зображення ${publicId}:`, error);
+    return {
+      success: false,
+      message: error.message || "Невідома помилка при видаленні",
+    };
+  }
+};
+export const deleteMultipleImages = async (
+  publicIds: string[]
+): Promise<{
+  success: boolean;
+  results?: { publicId: string; success: boolean; message?: string }[];
+  message?: string;
+}> => {
+  try {
+    if (!publicIds || publicIds.length === 0) {
+      return {
+        success: false,
+        message: "Не надано жодного ID для видалення",
+      };
+    }
+
+    const results = [];
+
+    for (const publicId of publicIds) {
+      const result = await deleteImage(publicId);
+      results.push({
+        publicId,
+        success: result.success,
+        message: result.message,
+      });
+    }
+
+    const allSuccessful = results.every((result) => result.success);
+
+    return {
+      success: allSuccessful,
+      results,
+      message: allSuccessful
+        ? `Успішно видалено всі ${publicIds.length} зображень`
+        : `Деякі зображення не вдалося видалити`,
+    };
+  } catch (error: any) {
+    console.error("Помилка при видаленні кількох зображень:", error.message);
+    return {
+      success: false,
+      message: error.message || "Невідома помилка при масовому видаленні",
     };
   }
 };

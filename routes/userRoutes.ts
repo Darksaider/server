@@ -3,7 +3,7 @@ import { createUser, LoginUser } from "../types/types";
 import userService, { ElysiaContext } from "../services/UserService"; // Потрібно правильно експортувати ElysiaContext
 import { routeErrorHandler } from "../utils/errors";
 import { hashPassword } from "../utils/hashPassword";
-import jwtMiddleware from "../Middleware/JwtMiddleware";
+import jwtAuth from "../Middleware/JwtMiddleware";
 
 export const userRoutes = new Elysia()
   .get("/users", async (context: Context) => {
@@ -18,7 +18,10 @@ export const userRoutes = new Elysia()
   .put("/users/:id", async (context: Context) => {
     const item = context.body as createUser;
     const id = context.params.id;
-    const res = await routeErrorHandler(context, async () => userService.updateUser(id, item));
+
+    const res = await routeErrorHandler(context, async () =>
+      userService.updateUser(id, item)
+    );
     return res;
   })
   .delete("/users/:id", async (context: Context) => {
@@ -35,33 +38,39 @@ export const userRoutes = new Elysia()
       password_hash: passwordGenerate,
     };
 
-    const res = await routeErrorHandler(context, async () => userService.createUser(newObj), 201);
+    const res = await routeErrorHandler(
+      context,
+      async () => userService.createUser(newObj),
+      201
+    );
     return res;
   })
   .post("/users/login", async (context: ElysiaContext) => {
     // Отримуємо токен від сервісу
-    const token = await routeErrorHandler(
-      context,
-      async () => userService.loginUser(context.body as LoginUser, context)
+    const token = await routeErrorHandler(context, async () =>
+      userService.loginUser(context.body as LoginUser, context)
     );
 
-    ;
     context.cookie.token.set({
-      value: token.data,
-      // httpOnly: true,
-      // maxAge: 7 * 24 * 60 * 60,
-      // sameSite: "strict"
+      value: token.data.token,
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60, // 7 днів
+      sameSite: "lax", // <--- ЗМІНЕНО ЗІ 'strict'
+      path: "/", // <--- ДОДАТИ ЦЕЙ АТРИБУТ
+      // secure: process.env.NODE_ENV === 'production', // Розкоментуйте для HTTPS в production
     });
 
-    return { message: "Login successful", token: token.data };
+    return { message: "Login successful", user: token.data.user };
   })
-  .use(jwtMiddleware)
-  .get("/profile", ({ user, set }) => {
-    if (!user) {
+  .use(jwtAuth) // Додаємо middleware для аутентифікації
+  .get("/me", ({ user, set }) => {
+    if (!user?.id) {
       set.status = 401;
+
       return { message: "Unauthorized" };
     }
-    return { user };
+
+    return { ...user };
   })
   .get("/admin", ({ user, hasRole, set }) => {
     if (!user) {
