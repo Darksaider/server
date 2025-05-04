@@ -1,8 +1,8 @@
 // src/repositories/favorites.repository.ts
 
 import { NotFoundError } from "elysia";
-import { RepositoryError } from "../../utils/errors";
-import prismaDb from "../prisma";
+import { RepositoryError } from "../utils/errors";
+import prismaDb from "../prisma/prisma";
 
 export const favoritesRepository = {
   async findByUserId(userId: number) {

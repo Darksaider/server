@@ -1,4 +1,4 @@
-import { Elysia, Context } from "elysia";
+import { Elysia } from "elysia";
 import { CreateTag } from "../types/types";
 import tagService from "../services/TagService";
 import { routeErrorHandler } from "../utils/errors";

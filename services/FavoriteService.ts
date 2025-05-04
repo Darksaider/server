@@ -1,6 +1,6 @@
 // src/services/favorites.service.ts
 import { NotFoundError } from "elysia"; // Для кидання семантичних помилок
-import { favoritesRepository } from "../prisma/repositories/favoriteRepository";
+import { favoritesRepository } from "../repositories/favoriteRepository";
 import prismaDb from "../prisma/prisma";
 
 export const favoritesService = {

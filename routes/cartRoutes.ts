@@ -36,9 +36,10 @@ export const cartRoutes = new Elysia()
   .delete("cart/:id", async ({ user, params, set }) => {
     if (!user?.id) throw new Error("Authentication required");
 
-    const { id } = params;
-    await cartService.removeFavorite(user.id, +id);
+    const cartId = +params.id;
+    await cartService.removeCart(cartId, user.id);
 
     set.status = 204;
     return "Delete Successful";
   });
+1;

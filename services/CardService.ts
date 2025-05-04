@@ -1,6 +1,6 @@
 // src/services/favorites.service.ts
 import { NotFoundError } from "elysia"; // Для кидання семантичних помилок
-import { cartRepository } from "../prisma/repositories/cartRepository";
+import { cartRepository } from "../repositories/cartRepository";
 import { Cart, CreateCart } from "../types/types";
 
 export const cartService = {
@@ -10,6 +10,7 @@ export const cartService = {
   async getUserCart(userId: number) {
     // Просто викликаємо репозиторій
     const favorites = await cartRepository.findByUserId(userId);
+
     // Можна додати логіку мапінгу результату, якщо потрібно
     return favorites;
   },
@@ -32,7 +33,7 @@ export const cartService = {
       // Обробка помилки унікальності (якщо запис вже існує)
       if (error.code === "P2002") {
         console.warn(
-          `Attempted to add existing favorite: user ${userId}, product ${data.product_id}`
+          `Attempted to add existing : user ${userId}, product ${data.product_id}`
         );
         return null; // Або кинути кастомну помилку "Already Exists"
       }
@@ -44,14 +45,12 @@ export const cartService = {
   /**
    * Видаляє товар з улюблених.
    */
-  async removeFavorite(userId: number, productId: number) {
-    const deletedFavorite = await cartRepository.remove(userId, productId);
+  async removeCart(cartId: number, userId: number) {
+    const deletedFavorite = await cartRepository.remove(cartId, userId);
 
     if (deletedFavorite === null) {
       // Якщо репозиторій повернув null, значить запис не знайдено
-      throw new NotFoundError(
-        `Favorite entry for user ${userId} and product ${productId} not found.`
-      );
+      throw new NotFoundError(`Favorite no delete cart id${cartId} not found.`);
     }
     return true; // Або return deletedFavorite;
   },

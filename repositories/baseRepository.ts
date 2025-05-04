@@ -1,8 +1,8 @@
 import { PrismaClient, Prisma } from "@prisma/client";
-import prismaDb from "../prisma";
-import { Filter } from "../../types/types";
-import { FindManyConfig, IRepository } from "../../types/interfaces";
-import { NotFoundError, RepositoryError } from "../../utils/errors";
+import prismaDb from "../prisma/prisma";
+import { Filter } from "../types/types";
+import { FindManyConfig, IRepository } from "../types/interfaces";
+import { NotFoundError, RepositoryError } from "../utils/errors";
 
 function createRepository<
   T,
@@ -28,7 +28,6 @@ function createRepository<
 
     async findById(id: number, config?: FindManyConfig<T>): Promise<T | null> {
       try {
-
         const res = await (prismaDb[modelName] as any).findUnique({
           where: { id: Number(id) },
           include: config?.include,
@@ -37,7 +36,7 @@ function createRepository<
       } catch (error: any) {
         throw new RepositoryError(
           `Failed to find ${modelName} by ID ${id}`,
-          error,
+          error
         );
       }
     },
@@ -69,7 +68,7 @@ function createRepository<
       } catch (error: any) {
         throw new RepositoryError(
           `Failed to update ${modelName} with ID ${id}`,
-          error,
+          error
         );
       }
     },
@@ -82,7 +81,7 @@ function createRepository<
       } catch (error: any) {
         throw new RepositoryError(
           `Failed to delete ${modelName} with ID ${id}`,
-          error,
+          error
         );
       }
     },

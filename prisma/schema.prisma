@@ -14,17 +14,23 @@ model brands {
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-model cart {
-  id         Int       @id @default(autoincrement())
-  user_id    Int
-  product_id Int
-  quantity   Int?      @default(1)
-  added_at   DateTime? @default(now()) @db.Timestamp(6)
-  products   products  @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([user_id, product_id])
+model cart {
+  id           Int       @id @default(autoincrement())
+  user_id      Int
+  product_id   Int
+  size_id      Int       // Змінено з product_size_id на size_id
+  color_id     Int       // Змінено з product_color_id на color_id
+  quantity     Int       @default(1)
+  added_at     DateTime  @default(now()) @db.Timestamp(6)
+  products     products  @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users        users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sizes        sizes     @relation(fields: [size_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  colors       colors    @relation(fields: [color_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@unique([user_id, product_id, size_id, color_id])
 }
+
 
 model categories {
   id                 Int                  @id @default(autoincrement())
@@ -41,6 +47,8 @@ model colors {
   name           String           @unique @db.VarChar(50)
   hex_code       String           @unique @db.VarChar(7)
   product_colors product_colors[]
+  cart      cart[]   // Добавлена обратная связь
+
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -116,7 +124,6 @@ model product_tags {
   tag_id     Int
   products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   tags       tags     @relation(fields: [tag_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
   @@unique([product_id, tag_id])
 }
 
@@ -140,6 +147,8 @@ model products {
   product_sizes      product_sizes[]
   product_tags       product_tags[]
   order_items        order_items[]
+  comments              comments[]
+
 
   @@index([name])
   @@index([price])
@@ -149,6 +158,8 @@ model sizes {
   id            Int             @id @default(autoincrement())
   size          String          @unique @db.VarChar(10)
   product_sizes product_sizes[]
+  cart       cart[]   // Добавлена обратная связь
+  @@index([size])
 }
 
 model tags {
@@ -171,6 +182,7 @@ model users {
   cart          cart[]
   favorites     favorites[]
   orders        orders[]
+  comments         comments[]
 
   @@index([email])
 }
@@ -196,19 +208,43 @@ model product_discounts {
 }
 
 model orders {
-  id             Int            @id @default(autoincrement())
-  user_id        Int
-  status         String         @db.VarChar(50)
-  total_amount   Decimal        @db.Decimal(10, 2)
-  shipping_address String?
-  payment_method String?        @db.VarChar(50)
-  notes          String?
-  created_at     DateTime?      @default(now()) @db.Timestamp(6)
-  updated_at     DateTime?      @default(now()) @db.Timestamp(6)
-  users          users          @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  order_items    order_items[]
+  id                Int            @id @default(autoincrement())
+  user_id           Int
+  status            String         @db.VarChar(50)
+  total_amount      Decimal        @db.Decimal(10, 2)
+  shipping_address  String?
+  payment_method    String?        @db.VarChar(50)
+  stripe_session_id String?        @unique // Додано поле для Stripe сесії
+  payment_status    String?        @default("pending") @db.VarChar(50) // Додано статус платежу
+  notes             String?
+  created_at        DateTime?      @default(now()) @db.Timestamp(6)
+  updated_at        DateTime?      @default(now()) @db.Timestamp(6)
+  users             users          @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order_items       order_items[]
+  payments          payments[]     // Додано зв'язок з платежами
 
   @@index([user_id])
+  @@index([status])
+  @@index([created_at])
+  @@index([payment_status]) // Додано індекс для швидкого пошуку за статусом платежу
+}
+
+// Нова модель для платежів
+model payments {
+  id                 Int       @id @default(autoincrement())
+  order_id           Int
+  amount             Decimal   @db.Decimal(10, 2)
+  currency           String    @default("uah") @db.VarChar(3)
+  payment_method     String    @db.VarChar(50)
+  stripe_payment_id  String?   @unique
+  stripe_intent_id   String?   @unique
+  status             String    @db.VarChar(50)
+  error_message      String?
+  created_at         DateTime? @default(now()) @db.Timestamp(6)
+  updated_at         DateTime? @default(now()) @db.Timestamp(6)
+  orders             orders    @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([order_id])
   @@index([status])
   @@index([created_at])
 }
@@ -225,3 +261,23 @@ model order_items {
   @@index([order_id])
   @@index([product_id])
 }
+
+/// This table contains check constraints for rating (0-5) and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model comments {
+  id          Int       @id @default(autoincrement())
+  user_id     Int
+  product_id  Int?      // Опціональне поле, якщо пост стосується продукту
+  text        String    // Текст повідомлення
+  rating      Int       @db.SmallInt // Рейтинг від 0 до 5
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+  updated_at  DateTime? @default(now()) @db.Timestamp(6)
+  user        users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product     products? @relation(fields: [product_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([user_id])
+  @@index([product_id])
+  @@index([rating])
+  @@index([created_at])
+}
+
+

@@ -5,5 +5,11 @@
   "dictionaries": [],
   "ignoreWords": [],
   "import": [],
-  "words": ["відправкою", "Кастомний", "autoincrement", "plpgsql"]
+  "words": [
+    "autoincrement",
+    "elysiajs",
+    "plpgsql",
+    "відправкою",
+    "Кастомний"
+  ]
 }

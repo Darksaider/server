@@ -1,4 +1,4 @@
-import prismaDb from "../prisma";
+import prismaDb from "../prisma/prisma";
 
 export async function getUniqueProductAttributes() {
   const colors = await prismaDb.colors.findMany({
@@ -48,6 +48,9 @@ export async function getAllProductAttributes() {
   const sizes = await prismaDb.sizes.findMany({
     select: { id: true, size: true },
   });
+  const discounts = await prismaDb.discounts.findMany({
+    select: { id: true, name: true },
+  });
 
-  return { colors, tags, categories, sizes, brands };
+  return { colors, tags, categories, sizes, brands, discounts };
 }

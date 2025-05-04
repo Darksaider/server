@@ -1,7 +1,7 @@
 import { createUser, UpdateUser, User, LoginUser } from "../types/types";
 import { createUserSchema } from "../prisma/schemas";
 import createService from "./baseService";
-import userRepository from "../prisma/repositories/userRepository";
+import userRepository from "../repositories/userRepository";
 import { Context } from "elysia"; // Імпортуємо Context з Elysia
 
 // Розширюємо тип Context, щоб включити jwt

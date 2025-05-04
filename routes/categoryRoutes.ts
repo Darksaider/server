@@ -22,14 +22,14 @@ categoryRoutes.get("/categories", async (context) => {
   return res;
 });
 
-categoryRoutes.delete("/category/:id", async (context) => {
+categoryRoutes.delete("/categories/:id", async (context) => {
   const id = context.params.id;
   const res = await routeErrorHandler(context, () =>
     categoryService.delete(id)
   );
   return res;
 });
-categoryRoutes.put("/category/:id", async (context) => {
+categoryRoutes.put("/categories/:id", async (context) => {
   const id = context.params.id;
   const data = context.body as CreateCategory;
   const res = await routeErrorHandler(context, () =>

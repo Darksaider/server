@@ -16,9 +16,11 @@ import {
   sizes,
   tags,
   users,
+  comments,
 } from "@prisma/client";
 
 // Типи для brands
+export type Comment = comments;
 export type Brand = brands;
 export type CreateBrand = Omit<brands, "id" | "product_brands">;
 

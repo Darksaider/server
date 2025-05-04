@@ -1,9 +1,9 @@
 import createRepository from "./baseRepository";
-import { Brand, CreateBrand } from "../../types/types";
+import { Brand, CreateBrand } from "../types/types";
 import { t } from "elysia";
 
 const brandRepository = createRepository<Brand, CreateBrand, {}, "brands">(
-  "brands",
+  "brands"
 );
 
 export default { ...brandRepository };

@@ -6,7 +6,7 @@ import colorService from "../services/colorService";
 import {
   getAllProductAttributes,
   getUniqueProductAttributes,
-} from "../prisma/repositories/filter";
+} from "../repositories/filter";
 export const colorRoutes = new Elysia();
 
 colorRoutes.post("/colors", async (context) => {

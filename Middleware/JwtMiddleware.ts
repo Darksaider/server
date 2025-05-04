@@ -43,7 +43,6 @@ const jwtMiddleware = new Elysia({ name: "jwt" })
         }
       } catch (error) {
         console.error("Invalid token:", error);
-        // Якщо токен невалідний, видаляємо куку
         ctx.cookie.token.remove();
       }
     }

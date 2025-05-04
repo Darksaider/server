@@ -20,6 +20,7 @@ interface CreateProductInput {
   product_colors: number[];
   product_sizes: number[];
   product_tags?: number[] | null;
+  product_discounts?: number; // ID знижок для застосування до продукту
   product_photos?: ProductPhotoInput[] | null; // Для створення продукту
   new_product_photos?: ProductPhotoInput[] | null; // Для оновлення - нові фото
   photos_to_delete?: string[] | null; // Для оновлення - ID фото для видалення
@@ -39,6 +40,7 @@ async function createProductWithRelations(data: CreateProductInput) {
     product_sizes,
     product_tags,
     product_photos,
+    product_discounts,
   } = data;
 
   // Підготовка фото для створення
@@ -55,6 +57,7 @@ async function createProductWithRelations(data: CreateProductInput) {
       photo_url: p.photo_url,
       cloudinary_public_id: p.cloudinary_public_id,
     }));
+  console.log("prodct", product_discounts);
 
   // Створення продукту в транзакції
   const newProduct = await prismaDb.$transaction(async (tx) => {
@@ -94,6 +97,13 @@ async function createProductWithRelations(data: CreateProductInput) {
             create: photosToCreate,
           },
         }),
+        // Умовне додавання знижки
+        ...(product_discounts !== undefined &&
+          product_discounts !== null && {
+            product_discounts: {
+              create: { discount_id: product_discounts },
+            },
+          }),
       },
       include: {
         product_photos: true,
@@ -102,6 +112,7 @@ async function createProductWithRelations(data: CreateProductInput) {
         product_colors: { include: { colors: true } },
         product_sizes: { include: { sizes: true } },
         product_tags: { include: { tags: true } },
+        product_discounts: { include: { discounts: true } },
       },
     });
     return createdProduct;
@@ -127,7 +138,9 @@ async function updateProductWithRelations(
     product_tags,
     new_product_photos,
     photos_to_delete,
+    product_discounts,
   } = data;
+  console.log(data);
 
   try {
     return await prismaDb.$transaction(async (tx) => {
@@ -208,6 +221,18 @@ async function updateProductWithRelations(
               })),
             },
           }),
+          ...(product_discounts !== undefined && product_discounts !== null
+            ? {
+                product_discounts: {
+                  deleteMany: {},
+                  create: { discount_id: product_discounts },
+                },
+              }
+            : {
+                product_discounts: {
+                  deleteMany: {},
+                },
+              }),
         },
         include: {
           product_photos: true,
@@ -216,6 +241,7 @@ async function updateProductWithRelations(
           product_colors: { include: { colors: true } },
           product_sizes: { include: { sizes: true } },
           product_tags: { include: { tags: true } },
+          product_discounts: { include: { discounts: true } },
         },
       });
 
@@ -234,8 +260,66 @@ async function updateProductWithRelations(
   }
 }
 
+// Функція отримання активних знижок для продукту
+async function getActiveDiscountsForProduct(productId: number) {
+  const currentDate = new Date();
+
+  const productWithDiscounts = await prismaDb.products.findUnique({
+    where: { id: productId },
+    include: {
+      product_discounts: {
+        include: {
+          discounts: true,
+        },
+        where: {
+          discounts: {
+            is_active: true,
+            start_date: { lte: currentDate },
+            end_date: { gte: currentDate },
+          },
+        },
+      },
+    },
+  });
+
+  return (
+    productWithDiscounts?.product_discounts.map((pd) => pd.discounts) || []
+  );
+}
+
+// Функція для розрахунку ціни з урахуванням знижок
+async function calculateDiscountedPrice(productId: number) {
+  const product = await prismaDb.products.findUnique({
+    where: { id: productId },
+    select: { price: true },
+  });
+
+  if (!product) return null;
+
+  const activeDiscounts = await getActiveDiscountsForProduct(productId);
+
+  if (activeDiscounts.length === 0) {
+    return product.price;
+  }
+
+  // Знаходимо максимальну знижку
+  const maxDiscount = activeDiscounts.reduce(
+    (max, discount) =>
+      discount.discount_percentage.gt(max) ? discount.discount_percentage : max,
+    new Prisma.Decimal(0)
+  );
+
+  // Розраховуємо ціну зі знижкою
+  const discountMultiplier = new Prisma.Decimal(1).minus(maxDiscount.div(100));
+  const discountedPrice = product.price.mul(discountMultiplier);
+
+  return discountedPrice;
+}
+
 // Експортуємо методи сервісу
 export const productService = {
   createProductWithRelations,
   updateProductWithRelations,
+  getActiveDiscountsForProduct,
+  calculateDiscountedPrice,
 };

@@ -1,10 +1,9 @@
-import prismaDb from "../prisma";
-import { Color, CreateColor } from "../../types/types";
+import prismaDb from "../prisma/prisma";
+import { Color, CreateColor } from "../types/types";
 import createRepository from "./baseRepository";
 const colorRepository = createRepository<Color, CreateColor, {}, "colors">(
-  "colors",
+  "colors"
 );
-
 
 const createColor = async (color: CreateColor): Promise<Color | null> => {
   try {

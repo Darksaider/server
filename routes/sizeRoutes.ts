@@ -2,6 +2,7 @@ import { Elysia, Context } from "elysia";
 import { CreateSize } from "../types/types";
 import sizeService from "../services/SizeService";
 import { routeErrorHandler } from "../utils/errors";
+import { createSizeSchema } from "../prisma/schemas";
 export const sizeRoutes = new Elysia();
 
 sizeRoutes.get("/sizes", async (context: Context) => {
@@ -18,9 +19,12 @@ sizeRoutes.post("/sizes", async (context) => {
   return res;
 });
 
-sizeRoutes.get("/sizes/:id", async (context) => {
+sizeRoutes.put("/sizes/:id", async (context) => {
   const id = context.params.id;
-  const res = await routeErrorHandler(context, () => sizeService.getById(id));
+  const data = context.body;
+  const res = await routeErrorHandler(context, () =>
+    sizeService.update(createSizeSchema, id, data)
+  );
   return res;
 });
 

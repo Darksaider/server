@@ -1,126 +1,289 @@
-// src/index.ts
+// src/routes/orders.ts
 import { Elysia } from "elysia";
-import { cors } from "@elysiajs/cors";
-import { PrismaClient } from "@prisma/client";
-import Stripe from "stripe";
+import prismaDb from "../prisma/prisma";
+import jwtMiddleware from "../Middleware/JwtMiddleware";
 
-const orderRoutes = new Elysia();
-const prisma = new PrismaClient();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
+export const orderRoutes = new Elysia()
+  .use(jwtMiddleware)
+  .get("/orders/:id", async ({ params, set }) => {
+    try {
+      const userId = +params.id;
+      console.log("ID користувача:", userId);
 
-orderRoutes.post("/api/create-checkout-session", async ({ body, set }) => {
-  try {
-    const { items, userId } = body as { items: any[]; userId: string };
-
-    if (!items || items.length === 0) {
-      set.status = 400;
-      return { error: "Товари не вказані" };
-    }
-
-    // Створюємо лінійні елементи для Stripe
-    const lineItems = items.map((item) => ({
-      price_data: {
-        currency: "uah",
-        product_data: {
-          name: item.name,
-          description: item.description,
+      const orders = await prismaDb.orders.findMany({
+        where: { user_id: userId },
+        include: {
+          order_items: {
+            include: {
+              products: true,
+            },
+          },
         },
-        unit_amount: Math.round(item.price * 100), // Ціна в копійках
-      },
-      quantity: item.quantity,
-    }));
+        orderBy: {
+          created_at: "desc",
+        },
+      });
 
-    // Створюємо сесію Stripe
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      line_items: lineItems,
-      mode: "payment",
-      success_url: `${process.env.CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.CLIENT_URL}/cancel`,
-      metadata: {
+      return orders;
+    } catch (error) {
+      console.error("Помилка отримання замовлень:", error);
+      set.status = 500;
+      return { error: "Не вдалося отримати замовлення" };
+    }
+  })
+
+  // Отримання деталей конкретного замовлення
+  .get("/order/:orderId", async ({ params, set }) => {
+    try {
+      const orderId = parseInt(params.orderId);
+
+      const order = await prismaDb.orders.findUnique({
+        where: { id: orderId },
+        include: {
+          order_items: {
+            include: {
+              products: true,
+            },
+          },
+        },
+      });
+
+      if (!order) {
+        set.status = 404;
+        return { error: "Замовлення не знайдено" };
+      }
+
+      return order;
+    } catch (error) {
+      console.error("Помилка отримання замовлення:", error);
+      set.status = 500;
+      return { error: "Не вдалося отримати деталі замовлення" };
+    }
+  })
+
+  // Виправлено шлях - додано слеш перед "orders"
+  .post("/orders", async ({ body, set, user }) => {
+    try {
+      if (!user?.id) {
+        set.status = 401;
+        console.log("Користувач не автентифікований:", user);
+        return { error: "Authentication required" };
+      }
+
+      // Перетворення user.id до числового типу
+      const userId = parseInt(user.id.toString());
+
+      // Перевірка чи існує користувач
+      const userExists = await prismaDb.users.findUnique({
+        where: { id: userId },
+      });
+
+      if (!userExists) {
+        set.status = 404;
+        return { error: "Користувача не знайдено" };
+      }
+
+      const { items, shippingAddress, paymentMethod, notes } = body as {
+        items: Array<{
+          productId: number;
+          quantity: number;
+          price: number;
+        }>;
+        shippingAddress: string;
+        paymentMethod: string;
+        notes?: string;
+      };
+
+      console.log("Отримані дані:", {
         userId,
-      },
-    });
+        items,
+        shippingAddress,
+        paymentMethod,
+        notes,
+      });
 
-    return { sessionId: session.id, url: session.url };
-  } catch (error) {
-    console.error("Помилка створення сесії платежу:", error);
-    set.status = 500;
-    return { error: "Не вдалося створити сесію платежу" };
-  }
-});
+      // Перевірка наявності товарів у замовленні
+      if (!items || items.length === 0) {
+        set.status = 400;
+        return { error: "Замовлення повинно містити хоча б один товар" };
+      }
 
-// Обробник webhook подій від Stripe
-orderRoutes.post("/api/webhook", async ({ request, set }) => {
-  const sig = request.headers.get("stripe-signature");
-  const payload = await request.text();
+      // Розрахунок загальної суми замовлення
+      const totalAmount = items.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0
+      );
 
-  try {
-    const event = stripe.webhooks.constructEvent(
-      payload,
-      sig || "",
-      process.env.STRIPE_WEBHOOK_SECRET || ""
-    );
+      // Створюємо замовлення в транзакції
+      const order = await prismaDb.$transaction(async (tx) => {
+        // Перевірка наявності товарів на складі перед створенням замовлення
+        for (const item of items) {
+          const product = await tx.products.findUnique({
+            where: { id: item.productId },
+          });
 
-    // Обробка різних подій Stripe
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object as Stripe.Checkout.Session;
+          if (!product) {
+            throw new Error(`Товар з ID ${item.productId} не знайдено`);
+          }
 
-        // Отримуємо дані замовлення
-        const userId = session.metadata?.userId;
+          if (product.stock === null || product.stock < item.quantity) {
+            throw new Error(
+              `Недостатня кількість товару ${product.name} на складі`
+            );
+          }
+        }
 
-        if (userId) {
-          // Створюємо замовлення в базі даних
-          await prisma.order.create({
+        // Створюємо основний запис замовлення
+        const newOrder = await tx.orders.create({
+          data: {
+            user_id: userId,
+            status: "pending", // Початковий статус
+            total_amount: totalAmount,
+            shipping_address: shippingAddress,
+            payment_method: paymentMethod,
+            payment_status: "pending",
+            notes: notes || null, // Переконуємось, що notes не undefined
+          },
+        });
+
+        // Створюємо елементи замовлення
+        for (const item of items) {
+          await tx.order_items.create({
             data: {
-              userId,
-              stripeSessionId: session.id,
-              status: "PAID",
-              amount: session.amount_total ? session.amount_total / 100 : 0,
-              currency: session.currency || "uah",
-              // Додайте інші поля, які вам потрібні
+              order_id: newOrder.id,
+              product_id: item.productId,
+              quantity: item.quantity,
+              price: item.price,
+            },
+          });
+
+          // Оновлюємо кількість на складі та лічильник продажів
+          await tx.products.update({
+            where: { id: item.productId },
+            data: {
+              stock: {
+                decrement: item.quantity,
+              },
+              sales_count: {
+                increment: item.quantity,
+              },
             },
           });
         }
-        break;
-      }
-      // Інші події, які вам можуть знадобитися
-      case "payment_intent.succeeded":
-      case "payment_intent.payment_failed":
-        // Обробка інших подій
-        break;
-      default:
-        console.log(`Unhandled event type ${event.type}`);
+
+        // Очищаємо кошик після створення замовлення
+        await tx.cart.deleteMany({
+          where: {
+            user_id: userId,
+          },
+        });
+
+        return newOrder;
+      });
+
+      return {
+        success: true,
+        orderId: order.id,
+        message: "Замовлення успішно створено",
+      };
+    } catch (error: any) {
+      console.error("Помилка створення замовлення:", error);
+      set.status = 500;
+      return {
+        error: `Не вдалося створити замовлення: ${error.message || error}`,
+      };
     }
+  })
 
-    return { received: true };
-  } catch (err) {
-    console.error("Помилка обробки webhook:", err);
-    set.status = 400;
-    return { error: "Помилка обробки webhook" };
-  }
-});
+  // Оновлення статусу замовлення - виправлено шлях
+  .patch("/order/:orderId/status", async ({ params, body, set }) => {
+    try {
+      const orderId = parseInt(params.orderId);
+      const { status } = body as { status: string };
 
-// Маршрут для отримання списку замовлень для користувача
-orderRoutes.get("/api/orders/:userId", async ({ params }) => {
-  try {
-    const orders = await prisma.order.findMany({
-      where: {
-        userId: params.userId,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+      const updatedOrder = await prismaDb.orders.update({
+        where: { id: orderId },
+        data: {
+          status,
+          updated_at: new Date(),
+        },
+      });
 
-    return orders;
-  } catch (error) {
-    console.error("Помилка отримання замовлень:", error);
-    return { error: "Не вдалося отримати замовлення" };
-  }
-});
+      return updatedOrder;
+    } catch (error) {
+      console.error("Помилка оновлення статусу замовлення:", error);
+      set.status = 500;
+      return { error: "Не вдалося оновити статус замовлення" };
+    }
+  })
 
-orderRoutes.listen(process.env.PORT || 3000, () => {
-  console.log(`🦊 Сервер запущений на порту ${process.env.PORT || 3000}`);
-});
+  // Скасування замовлення - виправлено шлях
+  .post("/order/:orderId/cancel", async ({ params, body, set }) => {
+    try {
+      const orderId = parseInt(params.orderId);
+      const { reason } = body as { reason?: string };
+
+      // Отримуємо поточне замовлення з товарами
+      const order = await prismaDb.orders.findUnique({
+        where: { id: orderId },
+        include: {
+          order_items: true,
+        },
+      });
+
+      if (!order) {
+        set.status = 404;
+        return { error: "Замовлення не знайдено" };
+      }
+
+      // Перевіряємо, чи можна скасувати замовлення
+      if (["delivered", "completed"].includes(order.status)) {
+        set.status = 400;
+        return {
+          error:
+            "Неможливо скасувати замовлення, яке вже доставлене або завершене",
+        };
+      }
+
+      // Скасовуємо замовлення в транзакції
+      const cancelledOrder = await prismaDb.$transaction(async (tx) => {
+        // Оновлюємо статус замовлення
+        const updated = await tx.orders.update({
+          where: { id: orderId },
+          data: {
+            status: "cancelled",
+            notes: order.notes
+              ? `${order.notes}\nСкасовано: ${reason || "Причина не вказана"}`
+              : `Скасовано: ${reason || "Причина не вказана"}`,
+            updated_at: new Date(),
+          },
+        });
+
+        for (const item of order.order_items) {
+          await tx.products.update({
+            where: { id: item.product_id },
+            data: {
+              stock: {
+                increment: item.quantity,
+              },
+              sales_count: {
+                decrement: item.quantity,
+              },
+            },
+          });
+        }
+
+        return updated;
+      });
+
+      return {
+        success: true,
+        order: cancelledOrder,
+        message: "Замовлення успішно скасовано",
+      };
+    } catch (error) {
+      console.error("Помилка скасування замовлення:", error);
+      set.status = 500;
+      return { error: "Не вдалося скасувати замовлення" };
+    }
+  });

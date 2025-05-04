@@ -170,4 +170,23 @@ export const AddProductRoutes = new Elysia()
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  })
+  .get("/newproducts/:id", async ({ set, params }) => {
+    const id = +params.id;
+    try {
+      3;
+      const products = await productService.calculateDiscountedPrice(id);
+      set.status = 200;
+      return {
+        message: "Products fetched successfully!",
+        products,
+      };
+    } catch (error: unknown) {
+      console.error("Error in GET /newproducts:", error);
+      set.status = 500;
+      return {
+        message: "Failed to fetch products",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   });
