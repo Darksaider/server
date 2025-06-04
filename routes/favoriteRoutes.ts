@@ -20,15 +20,12 @@ export const favoritesRoutes = new Elysia()
   .post("favorites", async (context) => {
     const { body, user, set } = context;
     if (!user?.id) throw new Error("Authentication required");
-
     const { id } = body as { id: number }; // Явно задаємо тип для body
     const result = await favoritesService.addFavorite(user.id, +id);
-
     if (result === null) {
       set.status = 200; // OK, але нічого не створено (або 409 Conflict)
       return { message: `Product ${+id} is already in favorites.` };
     }
-
     set.status = 201; // Created
     return {
       message: "Product added to favorites successfully!",

@@ -3,6 +3,8 @@ import { Comment } from "../types/types";
 
 const commentAdd = async (comment: Comment): Promise<Comment> => {
   try {
+    console.log("comment", comment);
+
     const newComment = await prismaDb.comments.create({
       data: {
         user_id: comment.user_id,
@@ -40,6 +42,7 @@ const getCommentsByProductId = async (
             id: true,
             first_name: true,
             email: true,
+            avatar_url: true,
           },
         },
       },

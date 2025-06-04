@@ -312,7 +312,7 @@ export async function getFilteredProducts(
       products: filteredProducts,
       productsCourt: filteredProducts.length,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error fetching filtered products:", error);
     throw new Error(`Failed to fetch products: ${error.message}`);
   }

@@ -4,21 +4,69 @@ import userService, { ElysiaContext } from "../services/UserService"; // Пот�
 import { routeErrorHandler } from "../utils/errors";
 import { hashPassword } from "../utils/hashPassword";
 import jwtAuth from "../Middleware/JwtMiddleware";
+import jwtMiddleware from "../Middleware/JwtMiddleware";
 
+export type ChangePassword = {
+  currentPassword: string;
+  newPassword: string;
+};
 export const userRoutes = new Elysia()
+  .use(jwtMiddleware)
   .get("/users", async (context: Context) => {
     const res = await routeErrorHandler(context, () => userService.getAll());
     return res;
   })
-  .get("/users/:id", async (context: Context) => {
-    const id = context.params.id;
-    const res = await routeErrorHandler(context, () => userService.getById(id));
+  .get("/users/account", async (context) => {
+    const data = context.user?.id;
+    if (!data) {
+      return "Unionization required";
+    }
+    const res = await routeErrorHandler(context, () =>
+      userService.getById(data)
+    );
     return res;
   })
+  .post("/users/passwordChanges", async (context) => {
+    const id = context.user?.id;
+    const body = context.body as ChangePassword;
+    console.log(body);
+
+    if (!id) {
+      return "Unionization required";
+    }
+    const res = await routeErrorHandler(context, () =>
+      userService.updataPassword(body, id)
+    );
+    return res;
+  })
+  // .put("/users/:id", async (context: Context) => {
+  //   const item = context.body;
+  //   const id = context.params.id;
+  //   console.log(item);
+
+  //   const res = await routeErrorHandler(context, async () =>
+  //     userService.updateUser(id, item)
+  //   );
+  //   return res;
+  // })
   .put("/users/:id", async (context: Context) => {
     const item = context.body as createUser;
     const id = context.params.id;
+    console.log("this", item);
 
+    const res = await routeErrorHandler(context, async () =>
+      userService.updateUser(id, item)
+    );
+    return res;
+  })
+  .put("/users/profile", async (context) => {
+    const item = context.body as createUser;
+    const id = context.user?.id;
+    if (!id)
+      return {
+        success: false,
+        message: "Користувач не увійшов ",
+      };
     const res = await routeErrorHandler(context, async () =>
       userService.updateUser(id, item)
     );
@@ -32,7 +80,6 @@ export const userRoutes = new Elysia()
   .post("/users", async (context: Context) => {
     const data = context.body as createUser;
     const passwordGenerate = await hashPassword(data.password_hash);
-
     const newObj: createUser = {
       ...data,
       password_hash: passwordGenerate,

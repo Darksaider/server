@@ -2,20 +2,34 @@
 import { Elysia } from "elysia";
 import prismaDb from "../prisma/prisma";
 import jwtMiddleware from "../Middleware/JwtMiddleware";
+export const ORDER_STATUS = {
+  Pending: "pending",
+  Processing: "processing",
+  Shipped: "shipped",
+  Delivered: "delivered",
+  Cancelled: "cancelled",
+} as const;
+
+export type OrderStatus = (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS];
 
 export const orderRoutes = new Elysia()
   .use(jwtMiddleware)
-  .get("/orders/:id", async ({ params, set }) => {
-    try {
-      const userId = +params.id;
-      console.log("ID користувача:", userId);
+  .get("/orders", async ({ set, user }) => {
+    if (!user || !user.id) {
+      set.status = 401;
+      return { error: "User not authenticated" };
+    }
+    const userId = +user.id;
 
+    try {
       const orders = await prismaDb.orders.findMany({
         where: { user_id: userId },
         include: {
           order_items: {
             include: {
               products: true,
+              colors: true,
+              sizes: true,
             },
           },
         },
@@ -31,12 +45,97 @@ export const orderRoutes = new Elysia()
       return { error: "Не вдалося отримати замовлення" };
     }
   })
+  .get("/ordersAll", async ({ set, user }) => {
+    if (!user || !user.id) {
+      set.status = 401;
+      return { error: "User not authenticated" };
+    }
+    try {
+      const orders = await prismaDb.orders.findMany({
+        include: {
+          order_items: {
+            include: {
+              products: {
+                include: {
+                  product_colors: {
+                    include: {
+                      colors: true,
+                    },
+                  },
+                  product_sizes: {
+                    include: {
+                      sizes: true,
+                    },
+                  },
+                },
+              },
+              colors: true, // колір вибраний у замовленні
+              sizes: true, // розмір вибраний у замовленні
+            },
+          },
+        },
+        orderBy: {
+          created_at: "desc",
+        },
+      });
+      function transformOrders(rawOrders: any) {
+        return rawOrders.map((rawOrder: any) => ({
+          id: rawOrder.id,
+          userId: rawOrder.user_id,
+          status: rawOrder.status,
+          totalAmount: rawOrder.total_amount,
+          shippingAddress: rawOrder.shipping_address,
+          paymentMethod: rawOrder.payment_method,
+          paymentStatus: rawOrder.payment_status,
+          createdAt: rawOrder.created_at,
+          updatedAt: rawOrder.updated_at,
+          items: rawOrder.order_items.map((item: any) => ({
+            id: item.id,
+            productId: item.product_id,
+            quantity: item.quantity,
+            price: item.price,
+            selectedColor: {
+              id: item.colors.id,
+              name: item.colors.name,
+              hexCode: item.colors.hex_code,
+            },
+            selectedSize: {
+              id: item.sizes.id,
+              size: item.sizes.size,
+            },
+            product: {
+              id: item.products.id,
+              name: item.products.name,
+              description: item.products.description,
+              price: item.products.price,
+              stock: item.products.stock,
+              salesCount: item.products.sales_count,
+              colors: item.products.product_colors.map((pc) => ({
+                id: pc.colors.id,
+                name: pc.colors.name,
+                hexCode: pc.colors.hex_code,
+              })),
+              sizes: item.products.product_sizes.map((ps) => ({
+                id: ps.sizes.id,
+                size: ps.sizes.size,
+              })),
+            },
+          })),
+        }));
+      }
+
+      return transformOrders(orders);
+    } catch (error) {
+      console.error("Помилка отримання замовлень:", error);
+      set.status = 500;
+      return { error: "Не вдалося отримати замовлення" };
+    }
+  })
 
   // Отримання деталей конкретного замовлення
   .get("/order/:orderId", async ({ params, set }) => {
     try {
       const orderId = parseInt(params.orderId);
-
       const order = await prismaDb.orders.findUnique({
         where: { id: orderId },
         include: {
@@ -61,7 +160,6 @@ export const orderRoutes = new Elysia()
     }
   })
 
-  // Виправлено шлях - додано слеш перед "orders"
   .post("/orders", async ({ body, set, user }) => {
     try {
       if (!user?.id) {
@@ -87,20 +185,13 @@ export const orderRoutes = new Elysia()
         items: Array<{
           productId: number;
           quantity: number;
-          price: number;
+          colorId: number;
+          sizeId: number;
         }>;
         shippingAddress: string;
         paymentMethod: string;
         notes?: string;
       };
-
-      console.log("Отримані дані:", {
-        userId,
-        items,
-        shippingAddress,
-        paymentMethod,
-        notes,
-      });
 
       // Перевірка наявності товарів у замовленні
       if (!items || items.length === 0) {
@@ -108,29 +199,105 @@ export const orderRoutes = new Elysia()
         return { error: "Замовлення повинно містити хоча б один товар" };
       }
 
-      // Розрахунок загальної суми замовлення
-      const totalAmount = items.reduce(
-        (sum, item) => sum + item.price * item.quantity,
-        0
-      );
-
       // Створюємо замовлення в транзакції
       const order = await prismaDb.$transaction(async (tx) => {
-        // Перевірка наявності товарів на складі перед створенням замовлення
+        // Валідація товарів та збір інформації про ціни
+        const validatedItems = [];
+        let totalAmount = 0;
+
         for (const item of items) {
+          // Отримуємо повну інформацію про продукт
           const product = await tx.products.findUnique({
             where: { id: item.productId },
+            include: {
+              product_colors: {
+                where: { color_id: item.colorId },
+                include: { colors: true },
+              },
+              product_sizes: {
+                where: { size_id: item.sizeId },
+                include: { sizes: true },
+              },
+              product_discounts: {
+                where: {
+                  product_id: item.productId,
+                },
+                include: {
+                  discounts: true,
+                },
+              },
+            },
           });
 
           if (!product) {
             throw new Error(`Товар з ID ${item.productId} не знайдено`);
           }
 
+          // Перевірка наявності кольору для цього продукту
+          if (product.product_colors.length === 0) {
+            throw new Error(
+              `Колір з ID ${item.colorId} недоступний для товару ${product.name}`
+            );
+          }
+
+          // Перевірка наявності розміру для цього продукту
+          if (product.product_sizes.length === 0) {
+            throw new Error(
+              `Розмір з ID ${item.sizeId} недоступний для товару ${product.name}`
+            );
+          }
+
+          // Перевірка кількості на складі
           if (product.stock === null || product.stock < item.quantity) {
             throw new Error(
               `Недостатня кількість товару ${product.name} на складі`
             );
           }
+
+          // Перевірка на позитивну кількість
+          if (item.quantity <= 0) {
+            throw new Error(
+              `Кількість товару ${product.name} повинна бути більше 0`
+            );
+          }
+          const discount = product.product_discounts?.[0]?.discounts;
+          let serverPrice = Number(product.price);
+
+          // Перевіряємо чи є знижка і чи вона активна
+          if (
+            discount &&
+            discount.is_active &&
+            new Date(discount.start_date) <= new Date() &&
+            new Date(discount.end_date) >= new Date()
+          ) {
+            const discountAmount =
+              (serverPrice * +discount.discount_percentage) / 100;
+            serverPrice = serverPrice - discountAmount;
+          }
+
+          const itemTotal = serverPrice * item.quantity;
+          totalAmount += itemTotal;
+
+          validatedItems.push({
+            productId: item.productId,
+            quantity: item.quantity,
+            price: serverPrice, // Ціна з сервера
+            colorId: item.colorId,
+            sizeId: item.sizeId,
+            product: product,
+          });
+        }
+
+        // Перевірка на унікальність комбінацій продукт+колір+розмір
+        const uniqueCheck = new Set();
+        for (const item of validatedItems) {
+          const key = `${item.productId}-${item.colorId}-${item.sizeId}`;
+          if (uniqueCheck.has(key)) {
+            throw new Error(
+              `Дублікат товару ${item.product.name} з однаковим кольором та розміром. Об'єднайте кількість.`
+            );
+          }
+          uniqueCheck.add(key);
         }
 
         // Створюємо основний запис замовлення
@@ -142,18 +309,20 @@ export const orderRoutes = new Elysia()
             shipping_address: shippingAddress,
             payment_method: paymentMethod,
             payment_status: "pending",
-            notes: notes || null, // Переконуємось, що notes не undefined
+            notes: notes || null,
           },
         });
 
-        // Створюємо елементи замовлення
-        for (const item of items) {
+        // Створюємо елементи замовлення з кольором та розміром
+        for (const item of validatedItems) {
           await tx.order_items.create({
             data: {
               order_id: newOrder.id,
               product_id: item.productId,
               quantity: item.quantity,
-              price: item.price,
+              price: item.price, // Ціна з сервера
+              color_id: item.colorId, // Додаємо колір
+              size_id: item.sizeId, // Додаємо розмір
             },
           });
 
@@ -184,6 +353,7 @@ export const orderRoutes = new Elysia()
       return {
         success: true,
         orderId: order.id,
+        totalAmount: order.total_amount,
         message: "Замовлення успішно створено",
       };
     } catch (error: any) {
@@ -251,7 +421,7 @@ export const orderRoutes = new Elysia()
         const updated = await tx.orders.update({
           where: { id: orderId },
           data: {
-            status: "cancelled",
+            status: ORDER_STATUS.Cancelled,
             notes: order.notes
               ? `${order.notes}\nСкасовано: ${reason || "Причина не вказана"}`
               : `Скасовано: ${reason || "Причина не вказана"}`,

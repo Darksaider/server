@@ -61,44 +61,6 @@ const findById = async (id: number, productInclude: any) => {
   }
 };
 
-// const getProductsByNewFilter = async (filter: any) => {
-//   try {
-//     const products = await prismaDb.products.findMany({
-//       ...filter,
-//     });
-//     const productsCourt = await prismaDb.products.count({
-//       where: {
-//         ...filter.where,
-//       },
-//     });
-//     const productsWithDiscounts = products.map((product) => {
-//       // Get the first active discount (as you mentioned only one should be used)
-//       const activeDiscount = product.product_discounts[0]?.discounts;
-
-//       if (activeDiscount) {
-//         // Use the existing calculateDiscountInfo function
-//         const basePrice = Number(product.price);
-//         const { finalPrice, discountPercentage } = calculateDiscountInfo(
-//           basePrice,
-//           activeDiscount
-//         );
-
-//         return {
-//           ...product,
-//           discounted_price: new Prisma.Decimal(finalPrice),
-//           discount_percentage: discountPercentage,
-//         };
-//       }
-
-//       return product;
-//     });
-
-//     return { products: productsWithDiscounts, productsCourt };
-//   } catch (error) {
-//     throw new RepositoryError("Не вдалося отримати продукти", error);
-//   }
-// };
-
 const getProductNew = async (params: ProductFilterParams) => {
   try {
     const result = await getFilteredProducts(prismaDb, params);
@@ -112,7 +74,6 @@ const getProductNew = async (params: ProductFilterParams) => {
 };
 export default {
   findById,
-  // getProductsByNewFilter,
   deleteProduct,
   getProductNew,
 };

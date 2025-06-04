@@ -140,7 +140,6 @@ async function updateProductWithRelations(
     photos_to_delete,
     product_discounts,
   } = data;
-  console.log(data);
 
   try {
     return await prismaDb.$transaction(async (tx) => {

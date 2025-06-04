@@ -13,16 +13,16 @@ export const commentRoutes = new Elysia()
     return res;
   })
   .post("/comments", async (context) => {
-    if (!context.user) {
-      return "User unlogin";
+    const user = context.user;
+    if (!user?.id) {
+      return { error: "User not logged in" };
     }
-    const userId = context.user.id;
+
     const data = context.body as Comment;
 
-    console.log({ user_id: userId, ...data });
-
     const res = await routeErrorHandler(context, () =>
-      commentService.commentAdd({ user_id: userId, ...data })
+      commentService.commentAdd({ ...data, user_id: user.id })
     );
+
     return res;
   });

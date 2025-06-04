@@ -48,6 +48,7 @@ model colors {
   hex_code       String           @unique @db.VarChar(7)
   product_colors product_colors[]
   cart      cart[]   // Добавлена обратная связь
+  order_items       order_items[]   // Добавлена обратная связь
 
 }
 
@@ -159,6 +160,7 @@ model sizes {
   size          String          @unique @db.VarChar(10)
   product_sizes product_sizes[]
   cart       cart[]   // Добавлена обратная связь
+  order_items       order_items[]   // Добавлена обратная связь
   @@index([size])
 }
 
@@ -255,11 +257,16 @@ model order_items {
   product_id Int
   quantity   Int
   price      Decimal   @db.Decimal(10, 2)
+  color_id   Int       // Новий поле
+  size_id    Int       // Новий поле
   orders     orders    @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   products   products  @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  colors     colors    @relation(fields: [color_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  sizes      sizes     @relation(fields: [size_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
   @@index([order_id])
   @@index([product_id])
+  @@unique([order_id, product_id, color_id, size_id]) // Унікальність на рівні БД
 }
 
 /// This table contains check constraints for rating (0-5) and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
