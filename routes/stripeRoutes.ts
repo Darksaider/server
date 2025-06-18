@@ -3,6 +3,7 @@ import { Elysia } from "elysia";
 import { PrismaClient } from "@prisma/client";
 import Stripe from "stripe";
 import jwtMiddleware from "../Middleware/JwtMiddleware";
+import { ORDER_STATUS, PAYMENT_STATUS } from "../utils/constans";
 
 const prisma = new PrismaClient();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
@@ -56,6 +57,7 @@ export const stripeRoutes = new Elysia({ prefix: "/stripe" })
         mode: "payment",
         success_url: `${process.env.CLIENT_URL}orders/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.CLIENT_URL}orders/cancel?order_id=${order.id}`,
+        customer_email: "vavasabi2@gmail.com",
         metadata: {
           orderId: order.id.toString(),
           userId: order.user_id.toString(),
@@ -67,7 +69,7 @@ export const stripeRoutes = new Elysia({ prefix: "/stripe" })
         where: { id: order.id },
         data: {
           stripe_session_id: session.id,
-          payment_status: "awaiting",
+          payment_status: PAYMENT_STATUS.Awaiting, // Змінюємо статус на "очікує оплати"
           updated_at: new Date(),
         },
       });
@@ -109,8 +111,8 @@ export const stripeRoutes = new Elysia({ prefix: "/stripe" })
           await prisma.orders.update({
             where: { id: orderId },
             data: {
-              status: "paid", // Змінюємо статус замовлення на "оплачено"
-              payment_status: "completed",
+              status: ORDER_STATUS.Confirmed, // Змінюємо статус замовлення на "оплачено"
+              payment_status: PAYMENT_STATUS.Completed, // Змінюємо статус платежу на "завершено"
               updated_at: new Date(),
             },
           });
@@ -123,7 +125,7 @@ export const stripeRoutes = new Elysia({ prefix: "/stripe" })
               currency: session.currency || "uah",
               payment_method: "card", // Можна розширити, якщо підтримуються інші методи
               stripe_payment_id: (session.payment_intent as string) || null,
-              status: "completed",
+              status: PAYMENT_STATUS.Completed, // Змінюємо статус платежу на "завершено"
             },
           });
 
@@ -139,7 +141,7 @@ export const stripeRoutes = new Elysia({ prefix: "/stripe" })
             await prisma.orders.update({
               where: { id: orderId },
               data: {
-                payment_status: "expired",
+                payment_status: PAYMENT_STATUS.Expired, // Змінюємо статус платежу на "прострочено"
                 updated_at: new Date(),
               },
             });
@@ -171,7 +173,7 @@ export const stripeRoutes = new Elysia({ prefix: "/stripe" })
             await prisma.orders.update({
               where: { id: payment.order_id },
               data: {
-                payment_status: "failed",
+                payment_status: PAYMENT_STATUS.Failed, // Змінюємо статус платежу на "не вдалося"
                 updated_at: new Date(),
               },
             });

@@ -15,10 +15,10 @@ import { AddProductRoutes } from "../routes/productsRoutes";
 import { categoryRoutes } from "../routes/categoryRoutes";
 import { favoritesRoutes } from "../routes/favoriteRoutes";
 import { cartRoutes } from "../routes/cartRoutes";
-import { uploadRoutes } from "../routes/ImageRouter";
 import { orderRoutes } from "../routes/orderRoutes";
 import { stripeRoutes } from "../routes/stripeRoutes";
 import { commentRoutes } from "../routes/commentRoutes";
+const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 const app = new Elysia();
 
@@ -30,7 +30,9 @@ app.use(
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Дозволені методи
   })
 );
-
+app.onBeforeHandle(async () => {
+  await delay(500); // 1-секундна затримка
+});
 app.use(cookie());
 app.use(jwtMiddleware);
 app.use(authRoutes);
@@ -45,7 +47,6 @@ app.use(AddProductRoutes);
 app.use(categoryRoutes);
 app.use(favoritesRoutes);
 app.use(cartRoutes);
-app.use(uploadRoutes);
 app.use(orderRoutes);
 app.use(stripeRoutes);
 app.use(commentRoutes);

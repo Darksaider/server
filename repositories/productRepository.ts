@@ -72,8 +72,54 @@ const getProductNew = async (params: ProductFilterParams) => {
     throw new RepositoryError("Не вдалося отримати продукт", error);
   }
 };
+const getProductWithDiscounts = async (params: ProductFilterParams) => {
+  try {
+    const result = await prismaDb.products.findMany({
+      where: {
+        product_discounts: {
+          some: {
+            discounts: {
+              is_active: true,
+            },
+          },
+        },
+      },
+      include: {
+        product_photos: {
+          select: {
+            photo_url: true,
+          },
+          take: 1,
+        },
+        product_discounts: {
+          include: {
+            discounts: true,
+          },
+        },
+        product_brands: {
+          include: {
+            brands: true,
+          },
+        },
+        comments: true, // Додаємо коментарі для розрахунку рейтингу
+      },
+      orderBy: {
+        created_at: "desc",
+      },
+    });
+    if (!result || result.length === 0) {
+      return result;
+    }
+  } catch (error) {
+    if (error instanceof RepositoryError) {
+      throw error;
+    }
+    throw new RepositoryError("Не вдалося отримати продукт", error);
+  }
+};
 export default {
   findById,
   deleteProduct,
   getProductNew,
+  getProductWithDiscounts,
 };

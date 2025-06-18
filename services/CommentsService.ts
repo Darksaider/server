@@ -10,6 +10,15 @@ const commentAdd = async (comment: Comment): Promise<Comment> => {
     throw new Error("Failed to add comment");
   }
 };
+const getAllComments = async (): Promise<Comment[]> => {
+  try {
+    const res = await commentRepository.getAllComments();
+    return res;
+  } catch (error) {
+    console.error("Error getting comments:", error);
+    throw new Error("Failed to get comments");
+  }
+};
 const deleteComment = async (id: number): Promise<Comment> => {
   try {
     const deletedComment = await commentRepository.deleteComment(id);
@@ -48,4 +57,5 @@ export default {
   deleteComment,
   getCommentsByProductId,
   commentAdd,
+  getAllComments,
 };

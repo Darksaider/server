@@ -12,6 +12,12 @@ export const commentRoutes = new Elysia()
     );
     return res;
   })
+  .get("/comments", async (context) => {
+    const res = await routeErrorHandler(context, () =>
+      commentService.getAllComments()
+    );
+    return res;
+  })
   .post("/comments", async (context) => {
     const user = context.user;
     if (!user?.id) {

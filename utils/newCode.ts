@@ -1,4 +1,15 @@
 import { PrismaClient } from "@prisma/client";
+import {
+  PRICE_DECIMAL_PLACES,
+  RATING_DECIMAL_PLACES,
+  DEFAULT_PAGE,
+  DEFAULT_LIMIT,
+  MIN_RATING_RANGE,
+  MAX_RATING_RANGE,
+} from "./constans";
+import { Decimal } from "@prisma/client/runtime/library";
+
+// Константи за замовчуванням
 
 // Типи даних для фільтрів
 export interface ProductFilterParams {
@@ -11,30 +22,115 @@ export interface ProductFilterParams {
   sizes?: number[];
   tags?: number[];
   inStock?: boolean;
-  minRating?: number; // Додано фільтр по мінімальному рейтингу
+  minRating?: number;
+  hasDiscount?: boolean;
   sortBy?:
     | "price_asc"
     | "price_desc"
     | "id_desc"
     | "newest"
     | "popular"
-    | "rating_desc"; // Додано сортування за рейтингом
+    | "rating_desc";
   page?: number;
   limit?: number;
 }
 
-// Функція для отримання фільтрованих продуктів
+// Тип для продукту з включеними зв'язками
+type ProductWithRelations = {
+  id: number;
+  name: string;
+  description: string | null;
+  price: string | Decimal;
+  stock: number;
+  created_at: Date;
+  sales_count: number | null;
+  product_photos: any[];
+  product_brands: { brands: any }[];
+  product_categories: { categories: any }[];
+  product_colors: { colors: any }[];
+  product_sizes: { sizes: any }[];
+  product_tags: { tags: any }[];
+  product_discounts: { discounts: any }[];
+  comments: { rating: number }[];
+};
+
+// Допоміжна функція для розрахунку знижки
+function calculateDiscountedPrice(product: ProductWithRelations): {
+  discountedPrice: number;
+  discountPercentage: number;
+} {
+  const hasActiveDiscount = product.product_discounts?.some((pd) => {
+    const discount = pd.discounts;
+    const now = new Date();
+    return (
+      discount.is_active &&
+      new Date(discount.start_date) <= now &&
+      new Date(discount.end_date) >= now
+    );
+  });
+
+  let discountPercentage = 0;
+  let discountedPrice = Number(product.price);
+
+  if (hasActiveDiscount) {
+    const activeDiscount = product.product_discounts?.find((pd) => {
+      const discount = pd.discounts;
+      const now = new Date();
+      return (
+        discount.is_active &&
+        new Date(discount.start_date) <= now &&
+        new Date(discount.end_date) >= now
+      );
+    });
+
+    if (activeDiscount) {
+      discountPercentage = Number(activeDiscount.discounts.discount_percentage);
+      discountedPrice = Number(product.price) * (1 - discountPercentage / 100);
+      discountedPrice =
+        Math.round(discountedPrice * PRICE_DECIMAL_PLACES) /
+        PRICE_DECIMAL_PLACES;
+    }
+  }
+
+  return { discountedPrice, discountPercentage };
+}
+
+// Допоміжна функція для розрахунку рейтингу
+export function calculateRating(comments: { rating: number }[]): {
+  rating: number;
+  reviewsCount: number;
+} {
+  const ratings = comments?.map((comment) => comment.rating) || [];
+  const avgRating =
+    ratings.length > 0
+      ? ratings.reduce((sum: number, rating: number) => sum + rating, 0) /
+        ratings.length
+      : 0;
+
+  return {
+    rating:
+      Math.round(avgRating * RATING_DECIMAL_PLACES) / RATING_DECIMAL_PLACES,
+    reviewsCount: ratings.length,
+  };
+}
+
+// Основна функція для отримання фільтрованих продуктів
 export async function getFilteredProducts(
   prisma: PrismaClient,
   filters: ProductFilterParams
 ) {
+  console.log(filters);
+
   try {
-    // Будуємо умови WHERE для фільтрації
-    const whereConditions: any = {};
+    const page = filters.page || DEFAULT_PAGE;
+    const limit = filters.limit || DEFAULT_LIMIT;
+
+    // Будуємо базові умови WHERE
+    const baseWhereConditions: Record<string, any> = {};
 
     // Текстовий пошук
     if (filters.search) {
-      whereConditions.OR = [
+      baseWhereConditions.OR = [
         { name: { contains: filters.search, mode: "insensitive" } },
         { description: { contains: filters.search, mode: "insensitive" } },
       ];
@@ -42,237 +138,113 @@ export async function getFilteredProducts(
 
     // Наявність на складі
     if (filters.inStock !== undefined) {
-      whereConditions.stock = filters.inStock ? { gt: 0 } : { equals: 0 };
+      baseWhereConditions.stock = filters.inStock ? { gt: 0 } : { equals: 0 };
     }
 
-    // Підготовка запиту
-    const productsQuery = {
-      where: whereConditions,
-      include: {
-        product_photos: true,
-        product_brands: {
-          include: {
-            brands: true,
-          },
-        },
-        product_categories: {
-          include: {
-            categories: true,
-          },
-        },
-        product_colors: {
-          include: {
-            colors: true,
-          },
-        },
-        product_sizes: {
-          include: {
-            sizes: true,
-          },
-        },
-        product_tags: {
-          include: {
-            tags: true,
-          },
-        },
-        product_discounts: {
-          include: {
-            discounts: true,
-          },
-        },
-        comments: true, // Додано включення коментарів для обрахунку рейтингу
-      },
-      orderBy: {},
-    };
-
-    // Додаємо фільтрацію по зв'язаних таблицях
-    // Категорії
+    // Фільтрація по зв'язаних таблицях
     if (filters.categories?.length) {
-      productsQuery.where.product_categories = {
-        some: {
-          category_id: { in: filters.categories },
-        },
+      baseWhereConditions.product_categories = {
+        some: { category_id: { in: filters.categories } },
       };
     }
 
-    // Бренди
     if (filters.brands?.length) {
-      productsQuery.where.product_brands = {
-        some: {
-          brand_id: { in: filters.brands },
-        },
+      baseWhereConditions.product_brands = {
+        some: { brand_id: { in: filters.brands } },
       };
     }
 
-    // Кольори
     if (filters.colors?.length) {
-      productsQuery.where.product_colors = {
-        some: {
-          color_id: { in: filters.colors },
-        },
+      baseWhereConditions.product_colors = {
+        some: { color_id: { in: filters.colors } },
       };
     }
 
-    // Розміри
     if (filters.sizes?.length) {
-      productsQuery.where.product_sizes = {
-        some: {
-          size_id: { in: filters.sizes },
-        },
+      baseWhereConditions.product_sizes = {
+        some: { size_id: { in: filters.sizes } },
       };
     }
 
-    // Теги
     if (filters.tags?.length) {
-      productsQuery.where.product_tags = {
+      baseWhereConditions.product_tags = {
+        some: { tag_id: { in: filters.tags } },
+      };
+    }
+    if (filters.hasDiscount) {
+      baseWhereConditions.product_discounts = {
         some: {
-          tag_id: { in: filters.tags },
+          discounts: {
+            is_active: true,
+            start_date: { lte: new Date() },
+            end_date: { gte: new Date() },
+          },
         },
       };
     }
-
-    // Фільтрація за мінімальним рейтингом через попереднє отримання даних про рейтинги
-    let productIdsWithMinRating: number[] = [];
+    // Фільтрація за рейтингом
     if (filters.minRating !== undefined && filters.minRating > 0) {
-      // Отримуємо середній рейтинг для всіх продуктів
       const productRatings = await prisma.comments.groupBy({
         by: ["product_id"],
-        _avg: {
-          rating: true,
-        },
+        _avg: { rating: true },
         where: {
           product_id: { not: null },
-          rating: { gte: 0, lte: 5 },
+          rating: { gte: MIN_RATING_RANGE, lte: MAX_RATING_RANGE },
         },
       });
 
-      // Фільтруємо ID продуктів з рейтингом не менше заданого
-      productIdsWithMinRating = productRatings
+      const productIdsWithMinRating = productRatings
         .filter(
-          (pr) => pr._avg.rating !== null && pr._avg.rating >= filters.minRating
+          (pr) =>
+            pr._avg.rating !== null && pr._avg.rating >= filters.minRating!
         )
-        .map((pr) => pr.product_id);
+        .map((pr) => pr.product_id!);
 
-      // Додаємо фільтр по ID в основний запит
       if (productIdsWithMinRating.length > 0) {
-        whereConditions.id = { in: productIdsWithMinRating };
+        baseWhereConditions.id = { in: productIdsWithMinRating };
       } else {
-        // Якщо немає продуктів з таким рейтингом, повертаємо пустий результат
         return {
           products: [],
-          productsCourt: 0,
+          totalCount: 0,
         };
       }
     }
 
-    // Сортування
-    if (filters.sortBy) {
-      switch (filters.sortBy) {
-        case "newest":
-          productsQuery.orderBy = { created_at: "desc" };
-          break;
-        case "popular":
-          productsQuery.orderBy = { sales_count: "desc" };
-          break;
-        case "id_desc":
-          productsQuery.orderBy = { id: "desc" };
-          break;
-        // Сортування за рейтингом буде застосовано після отримання продуктів
-        default:
-          productsQuery.orderBy = { id: "asc" };
-      }
-    } else {
-      productsQuery.orderBy = { id: "asc" };
-    }
-
-    // Спочатку отримуємо загальну кількість
-    const totalProducts = await prisma.products.count({
-      where: productsQuery.where,
+    // Отримуємо всі продукти, що відповідають базовим критеріям
+    const allProducts = await prisma.products.findMany({
+      where: baseWhereConditions,
+      include: {
+        product_photos: true,
+        product_brands: { include: { brands: true } },
+        product_categories: { include: { categories: true } },
+        product_colors: { include: { colors: true } },
+        product_sizes: { include: { sizes: true } },
+        product_tags: { include: { tags: true } },
+        product_discounts: { include: { discounts: true } },
+        comments: true,
+      },
     });
 
-    // Пагінація
-    const page = filters.page || 1;
-    const limit = filters.limit || 12;
-    const skip = (page - 1) * limit;
+    // Обробляємо всі продукти та додаємо розраховані поля
+    let processedProducts = allProducts.map((product) => {
+      const { discountedPrice, discountPercentage } = calculateDiscountedPrice(
+        product as ProductWithRelations
+      );
+      const { rating, reviewsCount } = calculateRating(product.comments);
 
-    // Отримуємо продукти з пагінацією
-    let products = await prisma.products.findMany({
-      ...productsQuery,
-      take: limit,
-      skip: skip,
-    });
-
-    // Обробляємо отримані продукти для правильного формату
-    const processedProducts = products.map((product) => {
-      // Обрахування середнього рейтингу продукту
-      const ratings = product.comments
-        ? product.comments.map((comment) => comment.rating)
-        : [];
-      const avgRating =
-        ratings.length > 0
-          ? ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length
-          : 0;
-
-      // Округлюємо до 1 десяткового знаку
-      const roundedRating = Math.round(avgRating * 10) / 10;
-
-      // Кількість відгуків
-      const reviewsCount = ratings.length;
-
-      // Перевіряємо, чи є активна знижка
-      const hasActiveDiscount = product.product_discounts.some((pd) => {
-        const discount = pd.discounts;
-        const now = new Date();
-        return (
-          discount.is_active &&
-          new Date(discount.start_date) <= now &&
-          new Date(discount.end_date) >= now
-        );
-      });
-
-      // Знаходимо відсоток знижки та розраховуємо ціну зі знижкою
-      let discountPercentage = 0;
-      let discountedPrice = product.price;
-
-      if (hasActiveDiscount) {
-        const activeDiscount = product.product_discounts.find((pd) => {
-          const discount = pd.discounts;
-          const now = new Date();
-          return (
-            discount.is_active &&
-            new Date(discount.start_date) <= now &&
-            new Date(discount.end_date) >= now
-          );
-        });
-
-        if (activeDiscount) {
-          discountPercentage = Number(
-            activeDiscount.discounts.discount_percentage
-          );
-          discountedPrice =
-            Number(product.price) * (1 - discountPercentage / 100);
-          discountedPrice = Math.round(discountedPrice * 100) / 100; // Округлення до 2 знаків
-        }
-      }
-
-      // Повертаємо об'єкт продукту у потрібному форматі зі збереженням всіх існуючих полів
       return {
         ...product,
         discounted_price: discountedPrice.toString(),
         discount_percentage: discountPercentage,
-        rating: roundedRating,
+        rating,
         reviews_count: reviewsCount,
       };
     });
 
-    // Фільтрація за ціною (включаючи знижки)
-    let filteredProducts = processedProducts;
-
+    // Фільтрація за ціною (після розрахунку знижок)
     if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
-      filteredProducts = filteredProducts.filter((product) => {
-        const priceToCompare = parseFloat(
-          product.discounted_price || product.price
-        );
+      processedProducts = processedProducts.filter((product) => {
+        const priceToCompare = parseFloat(product.discounted_price);
 
         if (
           filters.minPrice !== undefined &&
@@ -292,28 +264,79 @@ export async function getFilteredProducts(
       });
     }
 
-    // Сортування за ціною (з урахуванням знижок)
-    if (filters.sortBy === "price_asc" || filters.sortBy === "price_desc") {
-      filteredProducts.sort((a, b) => {
-        const priceA = parseFloat(a.discounted_price || a.price);
-        const priceB = parseFloat(b.discounted_price || b.price);
-        return filters.sortBy === "price_asc"
-          ? priceA - priceB
-          : priceB - priceA;
-      });
+    // Сортування
+    if (filters.sortBy) {
+      switch (filters.sortBy) {
+        case "price_asc":
+          processedProducts.sort(
+            (a, b) =>
+              parseFloat(a.discounted_price) - parseFloat(b.discounted_price)
+          );
+          break;
+        case "price_desc":
+          processedProducts.sort(
+            (a, b) =>
+              parseFloat(b.discounted_price) - parseFloat(a.discounted_price)
+          );
+          break;
+        case "rating_desc":
+          processedProducts.sort((a, b) => b.rating - a.rating);
+          break;
+        case "newest":
+          processedProducts.sort(
+            (a, b) =>
+              new Date(b.created_at!).getTime() -
+              new Date(a.created_at!).getTime()
+          );
+          break;
+        case "popular":
+          processedProducts.sort(
+            (a, b) => (b.sales_count || 0) - (a.sales_count || 0)
+          );
+          break;
+        case "id_desc":
+          processedProducts.sort((a, b) => b.id - a.id);
+          break;
+        default:
+          processedProducts.sort((a, b) => a.id - b.id);
+      }
     }
 
-    // Сортування за рейтингом (від найвищого до найнижчого)
-    if (filters.sortBy === "rating_desc") {
-      filteredProducts.sort((a, b) => b.rating - a.rating);
-    }
+    // Загальна кількість після всіх фільтрів
+    const totalCount = processedProducts.length;
+
+    // Пагінація (застосовується в кінці після всіх фільтрів)
+    const skip = (page - 1) * limit;
+    const paginatedProducts = processedProducts.slice(skip, skip + limit);
+    const products = paginatedProducts.map((product) => ({
+      id: product.id,
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      stock: product.stock,
+      sales_count: product.sales_count,
+      discounted_price: product.discounted_price,
+      discount_percentage: product.discount_percentage,
+      rating: product.rating,
+      reviews_count: product.reviews_count,
+      created_at: product.created_at,
+      product_photos: product.product_photos.map((photo) => photo),
+      product_brands: product.product_brands[0].brands,
+      product_categories: product.product_categories.map((pc) => pc.categories),
+      product_colors: product.product_colors.map((pc) => pc.colors),
+      product_sizes: product.product_sizes.map((ps) => ps.sizes),
+      product_tags: product.product_tags.map((pt) => pt.tags),
+      product_discounts: product.product_discounts[0],
+    }));
 
     return {
-      products: filteredProducts,
-      productsCourt: filteredProducts.length,
+      products: products,
+      totalCount: totalCount,
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error fetching filtered products:", error);
-    throw new Error(`Failed to fetch products: ${error.message}`);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    throw new Error(`Failed to fetch products: ${errorMessage}`);
   }
 }

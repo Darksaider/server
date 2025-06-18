@@ -37,7 +37,6 @@ export const cartRoutes = new Elysia()
     if (!user?.id) throw new Error("Authentication required");
 
     const cartId = +params.id;
-    console.log(cartId);
 
     await cartService.removeCart(cartId, user.id);
 
@@ -49,20 +48,22 @@ export const cartRoutes = new Elysia()
 
     return await cartService.getLocal(data);
   })
-  .put("cart", async (context) => {
+  .put("cart/:id", async (context) => {
     const bodyData = context.body as Partial<updateQuantityType>;
 
     if (!context.user?.id) {
       throw new Error("Authentication required");
     }
-
-    if (!bodyData.cartId || typeof bodyData.quantity !== "number") {
-      throw new Error("Invalid request data");
+    if (!context.params.id) {
+      throw new Error("Cart ID is required");
+    }
+    if (bodyData.quantity <= 0) {
+      throw new Error("Quantity must be a positive number");
     }
 
     const data: updateQuantityType = {
       userId: context.user.id,
-      cartId: bodyData.cartId,
+      cartId: +context.params.id,
       quantity: bodyData.quantity,
     };
 

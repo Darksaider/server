@@ -71,7 +71,29 @@ const updateComment = async (
     throw new Error("Failed to update comment");
   }
 };
+const getAllComments = async (): Promise<Comment[]> => {
+  try {
+    const updatedComment = await prismaDb.comments.findMany({
+      include: {
+        user: {
+          select: {
+            id: true,
+            first_name: true,
+            email: true,
+            avatar_url: true,
+          },
+        },
+      },
+    });
+    return updatedComment;
+  } catch (error) {
+    console.error("Error getting comments:", error);
+    throw new Error("Failed to get comments");
+  }
+};
+
 export default {
+  getAllComments,
   commentAdd,
   deleteComment,
   getCommentsByProductId,

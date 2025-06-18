@@ -1,4 +1,4 @@
-import { Elysia, Context } from "elysia";
+import { Elysia } from "elysia";
 import { CreateColor, createUser } from "../types/types";
 import userService from "../services/UserService";
 import { routeErrorHandler } from "../utils/errors";
@@ -6,7 +6,7 @@ import colorService from "../services/colorService";
 import {
   getAllProductAttributes,
   getUniqueProductAttributes,
-} from "../repositories/filter";
+} from "../repositories/filterRepository";
 export const colorRoutes = new Elysia();
 
 colorRoutes.post("/colors", async (context) => {
@@ -49,7 +49,7 @@ colorRoutes.get("/color/:id", async (context) => {
   return res;
 });
 
-colorRoutes.put("/users/:id", async (context) => {
+colorRoutes.put("/colors/:id", async (context) => {
   const item = context.body as CreateColor;
   const id = context.params.id;
   const res = await routeErrorHandler(context, async () =>

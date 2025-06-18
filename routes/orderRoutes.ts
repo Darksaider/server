@@ -2,15 +2,7 @@
 import { Elysia } from "elysia";
 import prismaDb from "../prisma/prisma";
 import jwtMiddleware from "../Middleware/JwtMiddleware";
-export const ORDER_STATUS = {
-  Pending: "pending",
-  Processing: "processing",
-  Shipped: "shipped",
-  Delivered: "delivered",
-  Cancelled: "cancelled",
-} as const;
-
-export type OrderStatus = (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS];
+import { PAYMENT_STATUS } from "../utils/constans";
 
 export const orderRoutes = new Elysia()
   .use(jwtMiddleware)
@@ -308,7 +300,7 @@ export const orderRoutes = new Elysia()
             total_amount: totalAmount,
             shipping_address: shippingAddress,
             payment_method: paymentMethod,
-            payment_status: "pending",
+            payment_status: PAYMENT_STATUS.Awaiting, // Початковий статус платежу
             notes: notes || null,
           },
         });

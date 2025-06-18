@@ -39,6 +39,21 @@ export const userRoutes = new Elysia()
     );
     return res;
   })
+  .post("/createBaseUser", async (context: Context) => {
+    const data = context.body as createUser;
+    const passwordGenerate = await hashPassword(data.password_hash);
+    const newObj: createUser = {
+      ...data,
+      password_hash: passwordGenerate,
+    };
+    const res = await routeErrorHandler(
+      context,
+      async () => userService.createUser(newObj),
+      201
+    );
+    return res;
+  })
+
   // .put("/users/:id", async (context: Context) => {
   //   const item = context.body;
   //   const id = context.params.id;
@@ -97,6 +112,8 @@ export const userRoutes = new Elysia()
     const token = await routeErrorHandler(context, async () =>
       userService.loginUser(context.body as LoginUser, context)
     );
+    // console.log("Token:", context.body);
+    console.log("Token data:", token);
 
     context.cookie.token.set({
       value: token.data.token,

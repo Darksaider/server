@@ -31,6 +31,17 @@ export type CreateCart = Omit<
   "id" | "added_at" | "user" | "product" | "user_id"
 >;
 
+export type CreateOrder = {
+  items: Array<{
+    productId: number;
+    quantity: number;
+    colorId: number;
+    sizeId: number;
+  }>;
+  shippingAddress: string;
+  paymentMethod: string;
+  notes?: string;
+};
 // Типи для categories
 export type Category = categories;
 export type CreateCategory = Omit<

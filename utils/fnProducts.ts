@@ -1,5 +1,3 @@
-import { PrismaClient } from "@prisma/client";
-
 // Типи для параметрів фільтрації
 export interface ProductFilterParams {
   search?: string;
@@ -11,6 +9,7 @@ export interface ProductFilterParams {
   sizes?: number[];
   tags?: number[];
   inStock?: boolean;
+  hasDiscount?: boolean;
   sortBy?: "price_asc" | "id_desc" | "price_desc" | "newest" | "popular";
   page?: number;
   limit?: number;
@@ -112,7 +111,7 @@ export function buildProductFilters(filters: ProductFilterParams) {
 
   // Налаштування пагінації
   const page = filters.page || 1;
-  const limit = filters.limit || 12;
+  const limit = filters.limit || 4;
   const skip = (page - 1) * limit;
 
   // Стандартні зв'язки для продуктів
@@ -177,7 +176,9 @@ export function parseProductFilters(
   if (query.maxPrice) {
     filters.maxPrice = parseFloat(String(query.maxPrice));
   }
-
+  if (query.hasDiscount) {
+    filters.hasDiscount = query.hasDiscount;
+  }
   // Обробка масивів
   const parseArrayParam = (param: string) => {
     if (!query[param]) return undefined;
@@ -206,7 +207,10 @@ export function parseProductFilters(
   if (query.inStock !== undefined) {
     filters.inStock = query.inStock === "true" || query.inStock === true;
   }
-
+  // if (query.hasDiscount !== undefined) {
+  //   filters.hasDiscount =
+  //     query.hasDiscount === "true" || query.hasDiscount === true;
+  // }
   // Сортування
   const validSortValues = ["price_asc", "price_desc", "newest", "popular"];
   if (query.sortBy && validSortValues.includes(String(query.sortBy))) {
@@ -222,7 +226,7 @@ export function parseProductFilters(
     filters.page = parseInt(String(query.page)) || 1;
   }
   if (query.limit) {
-    filters.limit = parseInt(String(query.limit)) || 10;
+    filters.limit = parseInt(String(query.limit)) || 4;
   }
 
   return filters;
